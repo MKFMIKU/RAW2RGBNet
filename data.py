@@ -13,8 +13,8 @@ def is_image_file(filename):
 class RAW2RGBData(data.Dataset):
     def __init__(self, dataset_dir, div=None, transform=None, test=False):
         super(RAW2RGBData, self).__init__()
-        data_dir = join(dataset_dir, "data")
-        label_dir = join(dataset_dir, "label")
+        data_dir = join(dataset_dir, "RAW")
+        label_dir = join(dataset_dir, "RGB")
 
         data_filenames = [join(data_dir, x) for x in listdir(data_dir) if is_image_file(x)]
         label_filenames = [join(label_dir, x) for x in listdir(label_dir) if is_image_file(x)]
@@ -33,8 +33,6 @@ class RAW2RGBData(data.Dataset):
 
         if self.transform:
             seed = random.randint(0, 2 ** 32)
-            random.seed(seed)
-            data = self.transform(data)
 
             random.seed(seed)
             data = self.transform(data)
@@ -42,3 +40,6 @@ class RAW2RGBData(data.Dataset):
             label = self.transform(label)
 
         return data, label
+
+    def __len__(self):
+        return len(self.data_filenames)

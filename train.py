@@ -15,6 +15,8 @@ from data import RAW2RGBData
 
 from tqdm import tqdm
 
+from utils import save_checkpoint
+
 parser = argparse.ArgumentParser(description="Training Script")
 parser.add_argument("--name", required=True, type=str, help="name for training version")
 parser.add_argument("--div", type=int, default=88000, help="division of train && test data. Default=88000")
@@ -24,6 +26,8 @@ parser.add_argument("--decay_epoch", type=int, default=1000, help="epoch from wh
 parser.add_argument("--resume", default="", type=str, help="path to checkpoint. Default: none")
 parser.add_argument("--start-epoch", default=1, type=int, help="Manual epoch number. Default=1")
 parser.add_argument("--n-epoch", type=int, default=2000, help="number of epochs to train. Default=2000")
+parser.add_argument("--cuda", default=True, action="store_true", help="Use cuda?")
+parser.add_argument("--lr", type=float, default=0.0001, help="learning rate. Default=1e-4")
 
 parser.add_argument(
     "--model",
@@ -37,6 +41,13 @@ parser.add_argument(
     type=str,
     help="path to load train datasets"
 )
+parser.add_argument(
+    "--checkpoint",
+    required=True,
+    type=str,
+    help="path to save checkpoints"
+)
+
 opts = parser.parse_args()
 print(opts)
 
@@ -51,6 +62,7 @@ if cuda and not torch.cuda.is_available():
 cudnn.benchmark = True
 
 train_dataset = RAW2RGBData(opts.data_root, div=opts.div, transform=transforms.Compose([
+    transforms.RandomCrop(128),
     transforms.RandomHorizontalFlip(),
     transforms.RandomVerticalFlip(),
     transforms.ToTensor(),
@@ -113,8 +125,8 @@ for epoch in range(opts.start_epoch, opts.n_epoch + 1):
             pbar.set_description("Epoch[{}]({}/{}): Loss: {:.4f}".format(
                 epoch, iteration, len(training_data_loader), loss.item())
             )
-
-    if epoch % 10 == 0:
+    save_checkpoint(model, None, epoch, opts.checkpoint)
+    if epoch % 2 == 0:
         mean_psnr = 0
 
         for iteration, batch in enumerate(testing_data_loader, 1):
