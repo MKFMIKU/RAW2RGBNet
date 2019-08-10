@@ -10,12 +10,13 @@ import torch.nn.functional as F
 from torch.backends import cudnn
 from torchvision import transforms
 from torch.utils.data import DataLoader
+from torch.utils.tensorboard import SummaryWriter
 
 from data import RAW2RGBData
 
 from tqdm import tqdm
 
-from utils import save_checkpoint
+from utils import save_checkpoint, plot_grad_flow, init_weights
 
 parser = argparse.ArgumentParser(description="Training Script")
 parser.add_argument("--name", required=True, type=str, help="name for training version")
@@ -28,7 +29,7 @@ parser.add_argument("--start-epoch", default=1, type=int, help="Manual epoch num
 parser.add_argument("--n-epoch", type=int, default=2000, help="number of epochs to train. Default=2000")
 parser.add_argument("--cuda", default=True, action="store_true", help="Use cuda?")
 parser.add_argument("--lr", type=float, default=0.0001, help="learning rate. Default=1e-4")
-
+parser.add_argument("--size", type=int, default=480, help="size that crop image into")
 parser.add_argument(
     "--model",
     required=True,
@@ -51,6 +52,8 @@ parser.add_argument(
 opts = parser.parse_args()
 print(opts)
 
+writer = SummaryWriter(log_dir='./logs', filename_suffix=opts.name)
+
 KWAI_SEED = 666
 torch.manual_seed(KWAI_SEED)
 np.random.seed(KWAI_SEED)
@@ -62,7 +65,7 @@ if cuda and not torch.cuda.is_available():
 cudnn.benchmark = True
 
 train_dataset = RAW2RGBData(opts.data_root, div=opts.div, transform=transforms.Compose([
-    transforms.RandomCrop(128),
+    transforms.RandomCrop(opts.size),
     transforms.RandomHorizontalFlip(),
     transforms.RandomVerticalFlip(),
     transforms.ToTensor(),
@@ -86,7 +89,10 @@ testing_data_loader = DataLoader(
 )
 
 model = import_module('models.' + opts.model.lower()).make_model(opts)
+writer.add_graph(model, torch.rand((1, 4, 256, 256)))
 criterion = nn.L1Loss()
+
+init_weights(model, 'orthogonal')
 
 if opts.resume:
     if os.path.isfile(opts.resume):
@@ -104,7 +110,6 @@ optimizer = optim.Adam(model.parameters(), lr=opts.lr, betas=(0.9, 0.999))
 lr_scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=opts.decay_epoch, gamma=0.1)
 
 for epoch in range(opts.start_epoch, opts.n_epoch + 1):
-    lr_scheduler.step(epoch=epoch)
     print("epoch =", epoch, "lr =", optimizer.param_groups[0]["lr"])
     model.train()
 
@@ -125,6 +130,9 @@ for epoch in range(opts.start_epoch, opts.n_epoch + 1):
             pbar.set_description("Epoch[{}]({}/{}): Loss: {:.4f}".format(
                 epoch, iteration, len(training_data_loader), loss.item())
             )
+            writer.add_scalar("l2loss", loss.item(), iteration+(epoch-1)*len(training_data_loader))
+    lr_scheduler.step(epoch=epoch)
+    writer.add_figure("gradient", plot_grad_flow(model.named_parameters()), epoch)
     save_checkpoint(model, None, epoch, opts.checkpoint)
     if epoch % 2 == 0:
         mean_psnr = 0
@@ -142,4 +150,6 @@ for epoch in range(opts.start_epoch, opts.n_epoch + 1):
             psnr = 10 * np.log10(1.0 / mse.item())
             mean_psnr += psnr
         mean_psnr /= len(testing_data_loader)
+        writer.add_scalar("mean_psnr", mean_psnr, epoch)
         print("Vaild  epoch %d psnr: %f" % (epoch, mean_psnr))
+writer.close()
