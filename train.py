@@ -52,7 +52,7 @@ parser.add_argument(
 opts = parser.parse_args()
 print(opts)
 
-writer = SummaryWriter(log_dir='./logs', filename_suffix=opts.name)
+writer = SummaryWriter(comment=opts.name)
 
 KWAI_SEED = 666
 torch.manual_seed(KWAI_SEED)
