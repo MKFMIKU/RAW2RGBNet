@@ -22,12 +22,35 @@ class RAW2RGBData(data.Dataset):
         data_filenames.sort()
         label_filenames.sort()
 
-        self.data_filenames = data_filenames[div:] if test else data_filenames[:div]
-        self.label_filenames = label_filenames[div:] if test else label_filenames[:div]
+        # self.data_filenames = data_filenames[div:] if test else data_filenames[:div]
+        # self.label_filenames = label_filenames[div:] if test else label_filenames[:div]
+
+        data_filenames = data_filenames[div:] if test else data_filenames[:div]
+        label_filenames = label_filenames[div:] if test else label_filenames[:div]
+        # data_filenames = data_filenames[88900:] if test else data_filenames[:200]
+        # label_filenames = label_filenames[88900:] if test else label_filenames[:200]
+
+        self.data_filenames = data_filenames
+        self.label_filenames = label_filenames
+        # self.data_filenames = []
+        # self.label_filenames = []
+        # for p in data_filenames:
+        #     im = Image.open(p)
+        #     self.data_filenames.append(im.copy())
+        #     im.close()
+        # for p in label_filenames:
+        #     im = Image.open(p)
+        #     self.label_filenames.append(im.copy())
+        #     im.close()
+
+        # self.data_filenames = [Image.open(p) for p in self.data_filenames]
+        # self.label_filenames = [Image.open(p) for p in self.label_filenames]
 
         self.transform = transform
 
     def __getitem__(self, index):
+        # data = self.data_filenames[index]
+        # label = self.label_filenames[index]
         data = Image.open(self.data_filenames[index])
         label = Image.open(self.label_filenames[index])
 

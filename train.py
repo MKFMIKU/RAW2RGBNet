@@ -20,7 +20,7 @@ from utils import save_checkpoint, plot_grad_flow, init_weights
 
 parser = argparse.ArgumentParser(description="Training Script")
 parser.add_argument("--name", required=True, type=str, help="name for training version")
-parser.add_argument("--div", type=int, default=88000, help="division of train && test data. Default=88000")
+parser.add_argument("--div", type=int, default=88800, help="division of train && test data. Default=88000")
 parser.add_argument("--batchSize", type=int, default=64, help="training batch size. Default=64")
 parser.add_argument("--threads", type=int, default=8, help="threads for data loader to use. Default=8")
 parser.add_argument("--decay_epoch", type=int, default=1000, help="epoch from which to start lr decay. Default=1000")
@@ -29,7 +29,8 @@ parser.add_argument("--start-epoch", default=1, type=int, help="Manual epoch num
 parser.add_argument("--n-epoch", type=int, default=2000, help="number of epochs to train. Default=2000")
 parser.add_argument("--cuda", default=True, action="store_true", help="Use cuda?")
 parser.add_argument("--lr", type=float, default=0.0001, help="learning rate. Default=1e-4")
-parser.add_argument("--size", type=int, default=480, help="size that crop image into")
+parser.add_argument("--size", type=int, default=64, help="size that crop image into")
+parser.add_argument("--local_rank", type=int, default=0, help="local rank")
 parser.add_argument(
     "--model",
     required=True,
@@ -60,9 +61,12 @@ np.random.seed(KWAI_SEED)
 
 
 cuda = opts.cuda
-if cuda and not torch.cuda.is_available():
-    raise Exception("No GPU found, please run without --cuda")
 cudnn.benchmark = True
+# torch.distributed.init_process_group(backend="nccl")
+# local_rank = torch.distributed.get_rank()
+# torch.cuda.set_device(local_rank)
+# device = torch.device("cuda", local_rank)
+
 
 train_dataset = RAW2RGBData(opts.data_root, div=opts.div, transform=transforms.Compose([
     transforms.RandomCrop(opts.size),
@@ -80,6 +84,7 @@ training_data_loader = DataLoader(
     pin_memory=True,
     shuffle=True,
     num_workers=opts.threads,
+    # sampler=torch.utils.data.distributed.DistributedSampler(train_dataset)
 )
 
 testing_data_loader = DataLoader(
@@ -89,8 +94,7 @@ testing_data_loader = DataLoader(
 )
 
 model = import_module('models.' + opts.model.lower()).make_model(opts)
-writer.add_graph(model, torch.rand((1, 4, 256, 256)))
-criterion = nn.L1Loss()
+criterion = nn.MSELoss()
 
 init_weights(model, 'orthogonal')
 
@@ -104,9 +108,11 @@ if opts.resume:
 
 if cuda:
     model = nn.DataParallel(model).cuda()
-    criterion = criterion.cuda()
+    # model.to(device)
+    # model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[local_rank], output_device=local_rank)
 
-optimizer = optim.Adam(model.parameters(), lr=opts.lr, betas=(0.9, 0.999))
+
+optimizer = optim.Adam(model.parameters(), lr=opts.lr, betas=(0.5, 0.999))
 lr_scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=opts.decay_epoch, gamma=0.1)
 
 for epoch in range(opts.start_epoch, opts.n_epoch + 1):
@@ -132,9 +138,9 @@ for epoch in range(opts.start_epoch, opts.n_epoch + 1):
             )
             writer.add_scalar("l2loss", loss.item(), iteration+(epoch-1)*len(training_data_loader))
     lr_scheduler.step(epoch=epoch)
-    writer.add_figure("gradient", plot_grad_flow(model.named_parameters()), epoch)
+    # writer.add_figure("gradient", plot_grad_flow(model.named_parameters()), epoch)
     save_checkpoint(model, None, epoch, opts.checkpoint)
-    if epoch % 2 == 0:
+    if epoch % 1 == 0:
         mean_psnr = 0
 
         for iteration, batch in enumerate(testing_data_loader, 1):

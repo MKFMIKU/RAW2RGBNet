@@ -4,7 +4,7 @@ import torch.nn.functional as F
 
 
 def make_model(opts):
-    return EncoderDecoderNet(n_feats=64, n_blocks=4, n_resgroups=16)
+    return EncoderDecoderNet(n_feats=64, n_blocks=4, n_resgroups=10)
 
 
 class RB(nn.Module):
@@ -14,10 +14,11 @@ class RB(nn.Module):
         for i in range(2):
             module_body.append(nn.Conv2d(n_feats, n_feats, kernel_size=3, stride=1, padding=1, bias=True))
             if nm == 'in':
-                module_body.append(nn.InstanceNorm2d(n_feats))
+                module_body.append(nn.InstanceNorm2d(n_feats, affine=True))
             if nm == 'bn':
                 module_body.append(nn.BatchNorm2d(n_feats))
-            module_body.append(nn.ReLU())
+            if i == 0:
+                module_body.append(nn.LeakyReLU(0.2, inplace=True))
         self.module_body = nn.Sequential(*module_body)
 
     def forward(self, x):
@@ -42,7 +43,7 @@ class RBGroup(nn.Module):
 
 
 class EncoderDecoderNet(nn.Module):
-    def __init__(self, n_feats, n_blocks, n_resgroups, nm=None):
+    def __init__(self, n_feats, n_blocks, n_resgroups, nm='in'):
         super(EncoderDecoderNet, self).__init__()
         self.n_feats = n_feats
         self.n_blocks = n_blocks
@@ -51,7 +52,7 @@ class EncoderDecoderNet(nn.Module):
         self.__build_model()
 
     def __build_model(self):
-        self.head = nn.Conv2d(4, self.n_feats, kernel_size=11, stride=1, padding=5, bias=True)
+        self.head = nn.Conv2d(4, self.n_feats, kernel_size=3, stride=1, padding=1, bias=True)
 
         # Build Local Path here use RCAN, while keeping the origin size of image
         local_path = [
@@ -64,34 +65,38 @@ class EncoderDecoderNet(nn.Module):
         global_path = []
         g_feats = self.n_feats
         for _ in range(4):
-            global_path.append(nn.Conv2d(g_feats, g_feats*2, kernel_size=3, stride=2, padding=1, bias=True))
+            global_path.append(nn.Conv2d(g_feats, g_feats, kernel_size=3, stride=2, padding=1, bias=True))
             if self.nm == 'in':
-                global_path.append(nn.InstanceNorm2d(g_feats))
+                global_path.append(nn.InstanceNorm2d(g_feats, affine=True))
             if self.nm == 'bn':
                 global_path.append(nn.BatchNorm2d(g_feats))
-            global_path.append(nn.ReLU())
-            g_feats *= 2
+            global_path.append(nn.LeakyReLU(0.2, inplace=True))
         for _ in range(4):
-            global_path.append(nn.ConvTranspose2d(g_feats, g_feats // 2, kernel_size=4, stride=2, padding=1, bias=True))
+            global_path.append(nn.ConvTranspose2d(g_feats, g_feats, kernel_size=4, stride=2, padding=1, bias=True))
             if self.nm == 'in':
-                global_path.append(nn.InstanceNorm2d(g_feats))
+                global_path.append(nn.InstanceNorm2d(g_feats, affine=True))
             if self.nm == 'bn':
                 global_path.append(nn.BatchNorm2d(g_feats))
-            global_path.append(nn.ReLU())
-            g_feats //= 2
+            global_path.append(nn.LeakyReLU(0.2, inplace=True))
         global_path.append(nn.Conv2d(g_feats, g_feats, kernel_size=3, stride=1, padding=1, bias=True))
         self.global_path = nn.Sequential(*global_path)
 
-        self.tail = nn.Conv2d(self.n_feats, 3, kernel_size=3, stride=1, padding=1, bias=False)
+        self.tail = nn.Sequential(
+            nn.Conv2d(self.n_feats*2, self.n_feats, kernel_size=3, stride=1, padding=1, bias=True),
+            nn.LeakyReLU(0.2, inplace=True),
+            nn.Conv2d(self.n_feats, 3, kernel_size=3, stride=1, padding=1, bias=True)
+        )
 
     def forward(self, x):
-        x = F.relu(self.head(x))
+        x = self.head(x)
 
         local_fea = self.local_path(x)
+        local_fea += x
 
         global_fea = self.global_path(x)
+        global_fea += x
 
-        fused_fea = F.relu((global_fea + local_fea), inplace=True)
+        fused_fea = torch.cat([global_fea, local_fea], dim=1)
 
-        x = self.tail(fused_fea + x)
+        x = self.tail(fused_fea)
         return x
