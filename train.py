@@ -139,7 +139,7 @@ for epoch in range(opts.start_epoch, opts.n_epoch + 1):
             writer.add_scalar("l2loss", loss.item(), iteration+(epoch-1)*len(training_data_loader))
     lr_scheduler.step(epoch=epoch)
     # writer.add_figure("gradient", plot_grad_flow(model.named_parameters()), epoch)
-    save_checkpoint(model, None, epoch, opts.checkpoint)
+    save_checkpoint(model, opts.name, None, epoch, opts.checkpoint)
     if epoch % 1 == 0:
         mean_psnr = 0
 

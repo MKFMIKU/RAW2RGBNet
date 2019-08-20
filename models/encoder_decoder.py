@@ -4,7 +4,7 @@ import torch.nn.functional as F
 
 
 def make_model(opts):
-    return EncoderDecoderNet(n_feats=64, n_blocks=4, n_resgroups=10)
+    return EncoderDecoderNet(n_feats=64, n_blocks=8, n_resgroups=10)
 
 
 class RB(nn.Module):
@@ -65,19 +65,21 @@ class EncoderDecoderNet(nn.Module):
         global_path = []
         g_feats = self.n_feats
         for _ in range(4):
-            global_path.append(nn.Conv2d(g_feats, g_feats, kernel_size=3, stride=2, padding=1, bias=True))
+            global_path.append(nn.Conv2d(g_feats, g_feats*2, kernel_size=3, stride=2, padding=1, bias=True))
             if self.nm == 'in':
-                global_path.append(nn.InstanceNorm2d(g_feats, affine=True))
+                global_path.append(nn.InstanceNorm2d(g_feats*2, affine=True))
             if self.nm == 'bn':
-                global_path.append(nn.BatchNorm2d(g_feats))
+                global_path.append(nn.BatchNorm2d(g_feats*2))
             global_path.append(nn.LeakyReLU(0.2, inplace=True))
+            g_feats *= 2
         for _ in range(4):
-            global_path.append(nn.ConvTranspose2d(g_feats, g_feats, kernel_size=4, stride=2, padding=1, bias=True))
+            global_path.append(nn.ConvTranspose2d(g_feats, g_feats//2, kernel_size=4, stride=2, padding=1, bias=True))
             if self.nm == 'in':
-                global_path.append(nn.InstanceNorm2d(g_feats, affine=True))
+                global_path.append(nn.InstanceNorm2d(g_feats//2, affine=True))
             if self.nm == 'bn':
-                global_path.append(nn.BatchNorm2d(g_feats))
+                global_path.append(nn.BatchNorm2d(g_feats//2))
             global_path.append(nn.LeakyReLU(0.2, inplace=True))
+            g_feats //= 2
         global_path.append(nn.Conv2d(g_feats, g_feats, kernel_size=3, stride=1, padding=1, bias=True))
         self.global_path = nn.Sequential(*global_path)
 

@@ -8,6 +8,7 @@ import torch
 from torch import nn, optim
 from torchvision import transforms
 from tqdm import tqdm
+import torchvision.transforms.functional as F
 
 import utils
 
@@ -62,5 +63,11 @@ images.sort()
 for im_path in tqdm(images):
     filename = im_path.split('/')[-1]
     img = Image.open(im_path)
-    output = infer(img)
+    output_aug = [infer(img),
+                  F.hflip(infer(F.hflip(img))),
+                  F.vflip(infer(F.vflip(img))),
+                  F.hflip(F.vflip(infer(F.hflip(F.vflip(img)))))]
+    output_aug = [np.asarray(p) for p in output_aug]
+    output_aug = np.mean(output_aug, axis=0).round().astype(np.uint8)
+    output = Image.fromarray(output_aug)
     output.save(os.path.join(opt.output, filename))

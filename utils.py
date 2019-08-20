@@ -53,10 +53,12 @@ def load_all_image(path):
     return [join(path, x) for x in listdir(path) if is_image_file(x)]
 
 
-def save_checkpoint(model, discriminator, epoch, model_folder):
+def save_checkpoint(model, name, discriminator, epoch, model_folder):
     if not exists(model_folder):
         os.makedirs(model_folder)
-    model_out_path = "%s/%d.pth" % (model_folder, epoch)
+    if not exists(join(model_folder, name)):
+        os.makedirs(join(model_folder, name))
+    model_out_path = "%s/%d.pth" % (join(model_folder, name), epoch)
 
     state_dict_model = model.module.state_dict()
 

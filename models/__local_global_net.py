@@ -4,7 +4,7 @@ import torch.nn.functional as F
 
 
 def make_model(opts):
-    return LocalGloablNet(n_feats=64, n_blocks=4, n_resgroups=10)
+    return LocalGloablNet(n_feats=64, n_blocks=3, n_resgroups=24)
 
 
 class RB(nn.Module):
@@ -14,11 +14,10 @@ class RB(nn.Module):
         for i in range(2):
             module_body.append(nn.Conv2d(n_feats, n_feats, kernel_size=3, stride=1, padding=1, bias=True))
             if nm == 'in':
-                module_body.append(nn.InstanceNorm2d(n_feats, affine=True))
+                module_body.append(nn.InstanceNorm2d(n_feats))
             if nm == 'bn':
                 module_body.append(nn.BatchNorm2d(n_feats))
-            if i == 0:
-                module_body.append(nn.LeakyReLU(0.2, inplace=True))
+            module_body.append(nn.ReLU())
         self.module_body = nn.Sequential(*module_body)
 
     def forward(self, x):
@@ -85,7 +84,6 @@ class LocalGloablNet(nn.Module):
 
         global_fea = self.global_path(x)
 
-        fused_fea = F.relu((global_fea + local_fea), inplace=True)
+        x = self.tail(global_fea + local_fea)
 
-        x = self.tail(fused_fea)
         return x

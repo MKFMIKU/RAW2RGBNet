@@ -4,7 +4,7 @@ import torch.nn.functional as F
 
 
 def make_model(opts):
-    return LocalGloablNet(n_feats=64, n_blocks=3, n_resgroups=24)
+    return LocalGloablNet(n_feats=64, n_blocks=8, n_resgroups=10)
 
 
 class RB(nn.Module):
@@ -14,10 +14,11 @@ class RB(nn.Module):
         for i in range(2):
             module_body.append(nn.Conv2d(n_feats, n_feats, kernel_size=3, stride=1, padding=1, bias=True))
             if nm == 'in':
-                module_body.append(nn.InstanceNorm2d(n_feats))
+                module_body.append(nn.InstanceNorm2d(n_feats, affine=True))
             if nm == 'bn':
                 module_body.append(nn.BatchNorm2d(n_feats))
-            module_body.append(nn.ReLU())
+            if i == 0:
+                module_body.append(nn.LeakyReLU(0.2, inplace=True))
         self.module_body = nn.Sequential(*module_body)
 
     def forward(self, x):
@@ -63,19 +64,18 @@ class LocalGloablNet(nn.Module):
         # Build Global Path here
         global_path = []
         g_feats = self.n_feats
-        for _ in range(4):
-            global_path.append(nn.AvgPool2d(2))
-            global_path.append(nn.Conv2d(g_feats, g_feats, kernel_size=3, stride=1, padding=1, bias=True))
+        for _ in range(6):
+            global_path.append(nn.Conv2d(g_feats, g_feats, kernel_size=3, stride=2, padding=1, bias=True))
+            global_path.append(nn.LeakyReLU(0.2, inplace=True))
             if self.nm == 'in':
                 global_path.append(nn.InstanceNorm2d(g_feats))
             if self.nm == 'bn':
                 global_path.append(nn.BatchNorm2d(g_feats))
-            global_path.append(nn.ReLU())
         global_path.append(nn.AdaptiveAvgPool2d(1))
-        global_path.append(nn.Conv2d(g_feats, g_feats, kernel_size=1, stride=1, padding=0, bias=False))
+        global_path.append(nn.Conv2d(g_feats, g_feats, kernel_size=1, stride=1, padding=0, bias=True))
         self.global_path = nn.Sequential(*global_path)
 
-        self.tail = nn.Conv2d(self.n_feats, 3, kernel_size=3, stride=1, padding=1, bias=False)
+        self.tail = nn.Conv2d(self.n_feats, 3, kernel_size=3, stride=1, padding=1, bias=True)
 
     def forward(self, x):
         x = self.head(x)
@@ -84,7 +84,5 @@ class LocalGloablNet(nn.Module):
 
         global_fea = self.global_path(x)
 
-        fused_fea = F.relu((global_fea + local_fea), inplace=True)
-
-        x = self.tail(fused_fea)
+        x = self.tail(global_fea + local_fea)
         return x
