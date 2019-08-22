@@ -45,7 +45,7 @@ class RB(nn.Module):
             if nm == 'bn':
                 module_body.append(nn.BatchNorm2d(n_feats))
             if i == 0:
-                module_body.append(nn.LeakyReLU(0.2, inplace=True))
+                module_body.append(nn.LeakyReLU(negative_slope=0.2, inplace=True))
         self.module_body = nn.Sequential(*module_body)
 
     def forward(self, x):
@@ -70,7 +70,7 @@ class RBGroup(nn.Module):
 
 
 class EncoderDecoderNet(nn.Module):
-    def __init__(self, n_feats, n_blocks, n_resgroups, nm='in'):
+    def __init__(self, n_feats, n_blocks, n_resgroups, nm=None):
         super(EncoderDecoderNet, self).__init__()
         self.n_feats = n_feats
         self.n_blocks = n_blocks
@@ -108,6 +108,14 @@ class EncoderDecoderNet(nn.Module):
             nn.LeakyReLU(negative_slope=0.2, inplace=True),
             MSRB(self.n_feats),
             nn.LeakyReLU(negative_slope=0.2, inplace=True),
+            MSRB(self.n_feats),
+            nn.LeakyReLU(negative_slope=0.2, inplace=True),
+            MSRB(self.n_feats),
+            nn.LeakyReLU(negative_slope=0.2, inplace=True),
+            MSRB(self.n_feats),
+            nn.LeakyReLU(negative_slope=0.2, inplace=True),
+            MSRB(self.n_feats),
+            nn.LeakyReLU(negative_slope=0.2, inplace=True),
             MSRB(self.n_feats)
         )
 
@@ -124,7 +132,7 @@ class EncoderDecoderNet(nn.Module):
         local_fea = self.local_path(x_down)
         local_fea += x_down
         local_fea = self.uper(local_fea)
-        # local_fea += x
+        local_fea += x
 
         global_fea = self.global_path(x)
         global_fea += x

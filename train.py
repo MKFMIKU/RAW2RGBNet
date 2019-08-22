@@ -11,6 +11,7 @@ from torch.backends import cudnn
 from torchvision import transforms
 from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
+from torchvision.utils import make_grid
 
 from data import RAW2RGBData
 
@@ -96,13 +97,13 @@ testing_data_loader = DataLoader(
 model = import_module('models.' + opts.model.lower()).make_model(opts)
 criterion = nn.MSELoss()
 
-init_weights(model, 'orthogonal')
+# init_weights(model, 'orthogonal')
 
 if opts.resume:
     if os.path.isfile(opts.resume):
         print("======> loading checkpoint at '{}'".format(opts.resume))
         checkpoint = torch.load(opts.resume)
-        model.load_state_dict(checkpoint["state_dict_model"])
+        model.load_state_dict(checkpoint["state_dict_model"], strict=False)
     else:
         print("======> founding no checkpoint at '{}'".format(opts.resume))
 
@@ -112,7 +113,7 @@ if cuda:
     # model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[local_rank], output_device=local_rank)
 
 
-optimizer = optim.Adam(model.parameters(), lr=opts.lr, betas=(0.5, 0.999))
+optimizer = optim.Adam(model.parameters(), lr=opts.lr, betas=(0.9, 0.999))
 lr_scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=opts.decay_epoch, gamma=0.1)
 
 for epoch in range(opts.start_epoch, opts.n_epoch + 1):
@@ -120,6 +121,7 @@ for epoch in range(opts.start_epoch, opts.n_epoch + 1):
     model.train()
 
     pbar = tqdm(training_data_loader)
+    output = None
     for iteration, batch in enumerate(pbar):
         data, label = batch[0], batch[1]
         data = data.cuda() if opts.cuda else data.cpu()
@@ -138,6 +140,7 @@ for epoch in range(opts.start_epoch, opts.n_epoch + 1):
             )
             writer.add_scalar("l2loss", loss.item(), iteration+(epoch-1)*len(training_data_loader))
     lr_scheduler.step(epoch=epoch)
+    writer.add_image("output", make_grid(output), epoch)
     # writer.add_figure("gradient", plot_grad_flow(model.named_parameters()), epoch)
     save_checkpoint(model, opts.name, None, epoch, opts.checkpoint)
     if epoch % 1 == 0:

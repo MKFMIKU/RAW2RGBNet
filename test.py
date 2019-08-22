@@ -9,6 +9,7 @@ from torch import nn, optim
 from torchvision import transforms
 from tqdm import tqdm
 import torchvision.transforms.functional as F
+from skimage.io import imsave
 
 import utils
 
@@ -23,38 +24,41 @@ parser.add_argument("--checkpoint", type=str, required=True, help="path to load 
 parser.add_argument("--output", type=str, required=True, help="path to save output images")
 parser.add_argument("--data", type=str, required=True, help="path to load data images")
 
-
 opt = parser.parse_args()
 print(opt)
-
 
 if not os.path.exists(opt.output):
     os.makedirs(opt.output)
 
 model = import_module('models.' + opt.model.lower()).make_model(opt)
-model.load_state_dict(torch.load(opt.checkpoint)['state_dict_model'])
-model = model.eval()
-model = model.cuda()
 
 
-def infer(im):
+def infer(im, model, path):
+    model.load_state_dict(torch.load(path)['state_dict_model'])
+    model = model.cuda()
+    model = model.eval()
     transform = transforms.Compose([
         transforms.ToTensor()
     ])
-
-    transform_back = transforms.Compose([
-        transforms.ToPILImage(),
-    ])
-    im = transform(im)
-    im = im.unsqueeze(0)
-    im = im.cuda()
+    im_augs = [
+        transform(im),
+        transform(F.hflip(im)),
+        transform(F.vflip(im)),
+        transform(F.hflip(F.vflip(im)))
+    ]
+    im_augs = torch.stack(im_augs)
+    im_augs = im_augs.cuda()
 
     with torch.no_grad():
-        output = model(im)
-    output = output.cpu().data[0]
-    output = torch.clamp(output, 0, 1)
-    output = transform_back(output)
-    return output
+        output_augs = model(im_augs)
+    output_augs = np.transpose(output_augs.cpu().numpy(), (0, 2, 3, 1))
+    output_augs = [
+        output_augs[0],
+        np.fliplr(output_augs[1]),
+        np.flipud(output_augs[2]),
+        np.fliplr(np.flipud(output_augs[3]))
+    ]
+    return np.mean(output_augs, axis=0)
 
 
 images = utils.load_all_image(opt.data)
@@ -63,11 +67,14 @@ images.sort()
 for im_path in tqdm(images):
     filename = im_path.split('/')[-1]
     img = Image.open(im_path)
-    output_aug = [infer(img),
-                  F.hflip(infer(F.hflip(img))),
-                  F.vflip(infer(F.vflip(img))),
-                  F.hflip(F.vflip(infer(F.hflip(F.vflip(img)))))]
-    output_aug = [np.asarray(p) for p in output_aug]
-    output_aug = np.mean(output_aug, axis=0).round().astype(np.uint8)
-    output = Image.fromarray(output_aug)
-    output.save(os.path.join(opt.output, filename))
+    # output = infer(img)
+    c1 = '/data1/kangfu/Checkpoints/RAW2RGB/_mix_ednet_light_increase_32_8_10_128/11.pth'
+    c2 = '/data1/kangfu/Checkpoints/RAW2RGB/_mix_ednet_light_increase_32_8_12_128/42.pth'
+    c3 = '/data1/kangfu/Checkpoints/RAW2RGB/_mix_ednet_light_increase_32_8_12_128/43.pth'
+    output_aug = [infer(img, model, c1),
+                  # infer(img, model, c2),
+                  # infer(img, model, c3)
+                  ]
+    output_aug = np.round(np.mean(output_aug, axis=0) * 255.).astype(np.uint8)
+    output_aug = np.clip(output_aug, 0, 255)
+    imsave(os.path.join(opt.output, filename), output_aug)

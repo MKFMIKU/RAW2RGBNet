@@ -3,6 +3,7 @@ import torch.utils.data as data
 from os import listdir
 from os.path import join
 import random
+from torchvision import transforms
 
 
 def is_image_file(filename):
@@ -25,8 +26,8 @@ class RAW2RGBData(data.Dataset):
         # self.data_filenames = data_filenames[div:] if test else data_filenames[:div]
         # self.label_filenames = label_filenames[div:] if test else label_filenames[:div]
 
-        data_filenames = data_filenames[div:] if test else data_filenames[:div]
-        label_filenames = label_filenames[div:] if test else label_filenames[:div]
+        data_filenames = data_filenames[::200] if test else list(set(data_filenames) - set(data_filenames[::200]))
+        label_filenames = label_filenames[::200] if test else list(set(label_filenames) - set(label_filenames[::200]))
         # data_filenames = data_filenames[88900:] if test else data_filenames[:200]
         # label_filenames = label_filenames[88900:] if test else label_filenames[:200]
 
@@ -42,15 +43,9 @@ class RAW2RGBData(data.Dataset):
         #     im = Image.open(p)
         #     self.label_filenames.append(im.copy())
         #     im.close()
-
-        # self.data_filenames = [Image.open(p) for p in self.data_filenames]
-        # self.label_filenames = [Image.open(p) for p in self.label_filenames]
-
         self.transform = transform
 
     def __getitem__(self, index):
-        # data = self.data_filenames[index]
-        # label = self.label_filenames[index]
         data = Image.open(self.data_filenames[index])
         label = Image.open(self.label_filenames[index])
 
