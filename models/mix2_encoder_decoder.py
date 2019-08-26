@@ -4,7 +4,7 @@ import torch.nn.functional as F
 
 
 def make_model(opts):
-    return EncoderDecoderNet(n_feats=32, n_blocks=10, n_resgroups=12)
+    return EncoderDecoderNet(n_feats=32, n_blocks=10, n_resgroups=16)
 
 
 class MSRB(nn.Module):
@@ -14,10 +14,10 @@ class MSRB(nn.Module):
         kernel_size_1 = 3
         kernel_size_2 = 5
 
-        self.conv_3_1 = nn.Conv2d(n_feats, n_feats, kernel_size_1, stride=1, padding=kernel_size_1//2)
-        self.conv_3_2 = nn.Conv2d(n_feats * 2, n_feats * 2, kernel_size_1, stride=1, padding=kernel_size_1//2)
-        self.conv_5_1 = nn.Conv2d(n_feats, n_feats, kernel_size_2, stride=1, padding=kernel_size_2//2)
-        self.conv_5_2 = nn.Conv2d(n_feats * 2, n_feats * 2, kernel_size_2, stride=1, padding=kernel_size_2//2)
+        self.conv_3_1 = nn.Conv2d(n_feats, n_feats, kernel_size_1, stride=1, padding=kernel_size_1 // 2)
+        self.conv_3_2 = nn.Conv2d(n_feats * 2, n_feats * 2, kernel_size_1, stride=1, padding=kernel_size_1 // 2)
+        self.conv_5_1 = nn.Conv2d(n_feats, n_feats, kernel_size_2, stride=1, padding=kernel_size_2 // 2)
+        self.conv_5_2 = nn.Conv2d(n_feats * 2, n_feats * 2, kernel_size_2, stride=1, padding=kernel_size_2 // 2)
         self.confusion = nn.Conv2d(n_feats * 4, n_feats, 1, padding=0, stride=1)
         self.relu = nn.LeakyReLU(negative_slope=0.2, inplace=True)
 
@@ -79,25 +79,27 @@ class EncoderDecoderNet(nn.Module):
         self.__build_model()
 
     def __build_model(self):
-        self.head = nn.Conv2d(4, self.n_feats, kernel_size=3, stride=1, padding=1, bias=True)
+        self.head = nn.Sequential(
+            nn.Conv2d(4, self.n_feats * 2, kernel_size=3, stride=1, padding=1, bias=True),
+            nn.LeakyReLU(negative_slope=0.2, inplace=True)
+        )
 
         self.downer = nn.Sequential(
-            nn.Conv2d(self.n_feats, self.n_feats * 2, kernel_size=3, stride=2, padding=1, bias=True),
+            nn.Conv2d(self.n_feats * 2, self.n_feats * 2, kernel_size=3, stride=2, padding=1, bias=True),
             nn.LeakyReLU(negative_slope=0.2, inplace=True),
-            nn.Conv2d(self.n_feats * 2, self.n_feats * 4, kernel_size=3, stride=2, padding=1, bias=True)
+            nn.Conv2d(self.n_feats * 2, self.n_feats * 2, kernel_size=3, stride=2, padding=1, bias=True)
         )
         local_path = [
-            RBGroup(n_feats=self.n_feats * 4, nm=self.nm, n_blocks=self.n_blocks) for _ in range(self.n_resgroups)
+            RBGroup(n_feats=self.n_feats * 2, nm=self.nm, n_blocks=self.n_blocks) for _ in range(self.n_resgroups)
         ]
-        local_path.append(nn.Conv2d(self.n_feats * 4, self.n_feats * 4, kernel_size=3, stride=1, padding=1, bias=True))
+        local_path.append(nn.Conv2d(self.n_feats * 2, self.n_feats * 2, kernel_size=3, stride=1, padding=1, bias=True))
         self.local_path = nn.Sequential(*local_path)
         self.uper = nn.Sequential(
-            nn.ConvTranspose2d(self.n_feats * 4, self.n_feats * 2, kernel_size=4, stride=2, padding=1, bias=True),
+            nn.ConvTranspose2d(self.n_feats * 2, self.n_feats * 2, kernel_size=4, stride=2, padding=1, bias=True),
             nn.LeakyReLU(negative_slope=0.2, inplace=True),
             nn.ConvTranspose2d(self.n_feats * 2, self.n_feats * 2, kernel_size=4, stride=2, padding=1, bias=True)
         )
 
-        self.global_up = nn.Conv2d(self.n_feats, self.n_feats * 2, kernel_size=3, stride=1, padding=1, bias=True)
         self.global_path = nn.Sequential(
             MSRB(self.n_feats * 2),
             MSRB(self.n_feats * 2),
@@ -105,28 +107,38 @@ class EncoderDecoderNet(nn.Module):
             MSRB(self.n_feats * 2),
             MSRB(self.n_feats * 2),
             MSRB(self.n_feats * 2),
+            MSRB(self.n_feats * 2),
+            MSRB(self.n_feats * 2)
         )
-        self.global_down = nn.Conv2d(self.n_feats * 7 * 2, self.n_feats * 2, kernel_size=3, stride=1, padding=1, bias=True)
+        self.global_down = nn.Conv2d(self.n_feats * 9 * 2, self.n_feats * 2, kernel_size=3, stride=1, padding=1, bias=True)
 
-        self.tail = nn.Conv2d(self.n_feats * 2, 3, kernel_size=3, stride=1, padding=1, bias=True)
+        self.linear = nn.Sequential(
+            nn.Conv2d(self.n_feats * 4, self.n_feats * 2, kernel_size=3, stride=1, padding=1, bias=True),
+            nn.LeakyReLU(negative_slope=0.2, inplace=True)
+        )
+
+        self.tail = nn.Sequential(
+            nn.Conv2d(self.n_feats * 2, 3, kernel_size=3, stride=1, padding=1, bias=True),
+            nn.Tanh()
+        )
 
     def forward(self, x):
-        x = F.leaky_relu(self.head(x), negative_slope=0.2, inplace=True)
+        x = self.head(x)
 
         x_down = self.downer(x)
         local_fea = self.local_path(x_down)
         local_fea += x_down
         local_fea = self.uper(local_fea)
 
-        x_global = self.global_up(x)
-        msrb_out = [x_global]
-        for i in range(6):
-            x_global = self.global_path[i](x_global)
-            msrb_out.append(x_global)
+        msrb_out = [x]
+        for i in range(8):
+            out = self.global_path[i](msrb_out[i])
+            msrb_out.append(out)
         global_fea = torch.cat(msrb_out, 1)
         global_fea = self.global_down(global_fea)
 
-        fused_fea = global_fea + local_fea * 0.4
+        fused_fea = torch.cat([global_fea, local_fea], 1)
+        fused_fea = self.linear(fused_fea)
 
-        x = self.tail(fused_fea)
-        return F.tanh(x)
+        x = self.tail(fused_fea + x)
+        return x

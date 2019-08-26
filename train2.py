@@ -10,7 +10,8 @@ import torch.nn.functional as F
 from torch.backends import cudnn
 from torchvision import transforms
 from torch.utils.data import DataLoader
-from torch.utils.tensorboard import SummaryWriter
+# from torch.utils.tensorboard import SummaryWriter
+from tensorboardX import SummaryWriter
 from torchvision.utils import make_grid
 
 from data import RAW2RGBData
