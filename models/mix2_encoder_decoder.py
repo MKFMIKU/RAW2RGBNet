@@ -4,7 +4,7 @@ import torch.nn.functional as F
 
 
 def make_model(opts):
-    return EncoderDecoderNet(n_feats=32, n_blocks=10, n_resgroups=16)
+    return EncoderDecoderNet(n_feats=32, n_blocks=10, n_resgroups=12)
 
 
 class MSRB(nn.Module):
@@ -79,10 +79,7 @@ class EncoderDecoderNet(nn.Module):
         self.__build_model()
 
     def __build_model(self):
-        self.head = nn.Sequential(
-            nn.Conv2d(4, self.n_feats * 2, kernel_size=3, stride=1, padding=1, bias=True),
-            nn.LeakyReLU(negative_slope=0.2, inplace=True)
-        )
+        self.head = nn.Conv2d(4, self.n_feats * 2, kernel_size=3, stride=1, padding=1, bias=True)
 
         self.downer = nn.Sequential(
             nn.Conv2d(self.n_feats * 2, self.n_feats * 2, kernel_size=3, stride=2, padding=1, bias=True),
@@ -107,10 +104,8 @@ class EncoderDecoderNet(nn.Module):
             MSRB(self.n_feats * 2),
             MSRB(self.n_feats * 2),
             MSRB(self.n_feats * 2),
-            MSRB(self.n_feats * 2),
-            MSRB(self.n_feats * 2)
         )
-        self.global_down = nn.Conv2d(self.n_feats * 9 * 2, self.n_feats * 2, kernel_size=3, stride=1, padding=1, bias=True)
+        self.global_down = nn.Conv2d(self.n_feats * 7 * 2, self.n_feats * 2, kernel_size=3, stride=1, padding=1, bias=True)
 
         self.linear = nn.Sequential(
             nn.Conv2d(self.n_feats * 4, self.n_feats * 2, kernel_size=3, stride=1, padding=1, bias=True),
@@ -131,7 +126,7 @@ class EncoderDecoderNet(nn.Module):
         local_fea = self.uper(local_fea)
 
         msrb_out = [x]
-        for i in range(8):
+        for i in range(6):
             out = self.global_path[i](msrb_out[i])
             msrb_out.append(out)
         global_fea = torch.cat(msrb_out, 1)

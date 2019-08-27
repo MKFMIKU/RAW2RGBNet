@@ -25,7 +25,7 @@ parser.add_argument("--name", required=True, type=str, help="name for training v
 parser.add_argument("--div", type=int, default=88800, help="division of train && test data. Default=88000")
 parser.add_argument("--batchSize", type=int, default=64, help="training batch size. Default=64")
 parser.add_argument("--threads", type=int, default=8, help="threads for data loader to use. Default=8")
-parser.add_argument("--decay_epoch", type=int, default=1000, help="epoch from which to start lr decay. Default=1000")
+parser.add_argument("--decay_epoch", type=int, default=50, help="epoch from which to start lr decay. Default=1000")
 parser.add_argument("--resume", default="", type=str, help="path to checkpoint. Default: none")
 parser.add_argument("--start-epoch", default=1, type=int, help="Manual epoch number. Default=1")
 parser.add_argument("--n-epoch", type=int, default=2000, help="number of epochs to train. Default=2000")
@@ -147,16 +147,19 @@ for epoch in range(opts.start_epoch, opts.n_epoch + 1):
     if epoch % 1 == 0:
         mean_psnr = 0
 
+        model.eval()
         for iteration, batch in enumerate(testing_data_loader, 1):
-            model.eval()
             data, label = batch[0], batch[1]
             data = data.cuda() if opts.cuda else data.cpu()
             label = label.cuda() if opts.cuda else label.cpu()
 
             with torch.no_grad():
                 output = model(data)
-            output = torch.clamp(output, 0.0, 1.0)
-            mse = F.mse_loss(output, label)
+            # output = torch.clamp(output, 0., 1.)
+            # output = torch.clamp(output, -1., 1.)
+            back_tf = transforms.Normalize(mean=(-1, -1, -1), std=(2, 2, 2))
+            # mse = F.mse_loss(output, label)
+            mse = F.mse_loss(back_tf(output[0]), back_tf(label[0]))
             psnr = 10 * np.log10(1.0 / mse.item())
             mean_psnr += psnr
         mean_psnr /= len(testing_data_loader)
