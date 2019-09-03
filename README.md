@@ -3,7 +3,7 @@ This is a PyTorch implement of RAW2RGBNet
 
 ## Training
 ```bash
-python -m torch.distributed.launch --nproc_per_node=4 train.py --name ednet_64_4_16_64 --model encoder_decoder --batchSize 32 --data_root /data1/kangfu/Datasets/RAW2RGB/ --checkpoint /data1/kangfu/Checkpoints/RAW2RGB/ --cuda --size 64
+ CUDA_VISIBLE_DEVICES=1,2,3 python train.py --name mix4_deep_encoder_decoder_32_8_10_8_144_f --model mix4_deep_encoder_decoder --batchSize=18 --data_root ~/ram_data/RAW2RGB/ --checkpoint /data1/kangfu/Checkpoints/RAW2RGB/ --cuda --size 192 --lr 1e-5 --n-epoch=100 --resume /data1/kangfu/Checkpoints/RAW2RGB/mix4_deep_encoder_decoder_32_8_10_8_144_f/16.pth --start-epoch=17
 ```
 
 ## Testing
