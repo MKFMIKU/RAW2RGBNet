@@ -44,7 +44,7 @@ def infer_(im, model, k=0):
     p1, p2 = (4 - h % 4) % 4, (4 - w % 4) % 4
 
     transform = transforms.Compose([
-        transforms.Pad((p1, p2, 0, 0), fill=0), ### left, top, right and bottom
+        transforms.Pad((p1, p2, 0, 0), padding_mode='edge'), ### left, top, right and bottom
         transforms.ToTensor()
     ])
 
@@ -84,7 +84,7 @@ def infer(im, model, path):
 
     im_xy = [(0, r), (r//2, r//2+r), (r, w)] # (0, 1032), (516, 1548), (1032, 2065)
     output_augs = torch.Tensor()
-    for k in range(4):
+    for k in range(1):
         outs = []
         for x, y in im_xy:
             inp = im[:, :, x:y]
@@ -100,14 +100,14 @@ def infer(im, model, path):
         torch.cuda.empty_cache()
 
     output_augs = np.transpose(output_augs.cpu().numpy(), (0, 2, 3, 1))
-    output_augs = [
-        output_augs[0],
-        np.fliplr(output_augs[1]),
-        np.flipud(output_augs[2]),
-        np.fliplr(np.flipud(output_augs[3]))
-    ]
-    return np.mean(output_augs, axis=0)
-    # return output_augs[0]
+    # output_augs = [
+    #     output_augs[0],
+    #     np.fliplr(output_augs[1]),
+    #     np.flipud(output_augs[2]),
+    #     np.fliplr(np.flipud(output_augs[3]))
+    # ]
+    # return np.mean(output_augs, axis=0)
+    return output_augs[0]
 
 images = utils.load_all_image(opt.data)
 images.sort()
