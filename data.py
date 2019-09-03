@@ -20,31 +20,20 @@ class RAW2RGBData(data.Dataset):
         data_filenames = [join(data_dir, x) for x in listdir(data_dir) if is_image_file(x)]
         label_filenames = [join(label_dir, x) for x in listdir(label_dir) if is_image_file(x)]
 
-        # data_filenames = data_filenames[:800]
-        # label_filenames = label_filenames[:800]
+        label_filenames.sort()
+        data_filenames.sort()
 
-        # self.data_filenames = data_filenames[div:] if test else data_filenames[:div]
-        # self.label_filenames = label_filenames[div:] if test else label_filenames[:div]
+        # data_filenames = data_filenames[:1200]
+        # label_filenames = label_filenames[:1200]
 
         data_filenames = data_filenames[::200] if test else list(set(data_filenames) - set(data_filenames[::200]))
         label_filenames = label_filenames[::200] if test else list(set(label_filenames) - set(label_filenames[::200]))
         label_filenames.sort()
         data_filenames.sort()
-        # data_filenames = data_filenames[88900:] if test else data_filenames[:200]
-        # label_filenames = label_filenames[88900:] if test else label_filenames[:200]
 
         self.data_filenames = data_filenames
         self.label_filenames = label_filenames
-        # self.data_filenames = []
-        # self.label_filenames = []
-        # for p in data_filenames:
-        #     im = Image.open(p)
-        #     self.data_filenames.append(im.copy())
-        #     im.close()
-        # for p in label_filenames:
-        #     im = Image.open(p)
-        #     self.label_filenames.append(im.copy())
-        #     im.close()
+
         self.transform = transform
 
     def __getitem__(self, index):

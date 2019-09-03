@@ -11,6 +11,8 @@ from matplotlib.lines import Line2D
 import matplotlib.pyplot as plt
 import numpy as np
 
+import math
+
 
 def plot_grad_flow(named_parameters):
     '''Plots the gradients flowing through different layers in the net during training.
@@ -97,15 +99,17 @@ def init_weights(net, init_type='normal', init_gain=0.02):
             elif init_type == 'xavier':
                 init.xavier_normal_(m.weight.data, gain=init_gain)
             elif init_type == 'kaiming':
-                init.kaiming_normal_(m.weight.data, a=0, mode='fan_in')
+                init.kaiming_uniform_(m.weight.data, a=math.sqrt(5))
             elif init_type == 'orthogonal':
                 init.orthogonal_(m.weight.data, gain=init_gain)
             else:
                 raise NotImplementedError('initialization method [%s] is not implemented' % init_type)
             if hasattr(m, 'bias') and m.bias is not None:
-                init.constant_(m.bias.data, 0.0)
-        elif classname.find(
-                'BatchNorm2d') != -1:  # BatchNorm Layer's weight is not a matrix; only normal distribution applies.
+                fan_in, _ = init._calculate_fan_in_and_fan_out(m.weight.data)
+                bound = 1 / math.sqrt(fan_in)
+                init.uniform_(m.bias.data, -bound, bound)
+
+        elif classname.find('BatchNorm2d') != -1:
             init.normal_(m.weight.data, 1.0, init_gain)
             init.constant_(m.bias.data, 0.0)
 

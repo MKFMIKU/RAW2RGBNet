@@ -1,5 +1,6 @@
 # coding=utf-8
 import argparse
+import sys
 import os
 from importlib import import_module
 
@@ -24,7 +25,7 @@ parser.add_argument("--name", required=True, type=str, help="name for training v
 parser.add_argument("--div", type=int, default=88800, help="division of train && test data. Default=88000")
 parser.add_argument("--batchSize", type=int, default=64, help="training batch size. Default=64")
 parser.add_argument("--threads", type=int, default=8, help="threads for data loader to use. Default=8")
-parser.add_argument("--decay_epoch", type=int, default=1000, help="epoch from which to start lr decay. Default=1000")
+parser.add_argument("--decay_epoch", type=int, default=50, help="epoch from which to start lr decay. Default=1000")
 parser.add_argument("--resume", default="", type=str, help="path to checkpoint. Default: none")
 parser.add_argument("--start-epoch", default=1, type=int, help="Manual epoch number. Default=1")
 parser.add_argument("--n-epoch", type=int, default=2000, help="number of epochs to train. Default=2000")
@@ -55,7 +56,7 @@ opts = parser.parse_args()
 print(opts)
 
 writer = SummaryWriter(comment=opts.name)
-
+writer.add_text("command", " ".join(sys.argv))
 KWAI_SEED = 666
 torch.manual_seed(KWAI_SEED)
 np.random.seed(KWAI_SEED)
@@ -63,11 +64,6 @@ np.random.seed(KWAI_SEED)
 
 cuda = opts.cuda
 cudnn.benchmark = True
-# torch.distributed.init_process_group(backend="nccl")
-# local_rank = torch.distributed.get_rank()
-# torch.cuda.set_device(local_rank)
-# device = torch.device("cuda", local_rank)
-
 
 train_dataset = RAW2RGBData(opts.data_root, div=opts.div, transform=transforms.Compose([
     transforms.RandomCrop(opts.size),
@@ -85,7 +81,6 @@ training_data_loader = DataLoader(
     pin_memory=True,
     shuffle=True,
     num_workers=opts.threads,
-    # sampler=torch.utils.data.distributed.DistributedSampler(train_dataset)
 )
 
 testing_data_loader = DataLoader(
@@ -95,6 +90,10 @@ testing_data_loader = DataLoader(
 )
 
 model = import_module('models.' + opts.model.lower()).make_model(opts)
+model_define_r = open(os.path.join("models", opts.model.lower() + ".py"), 'r')
+model_define = model_define_r.read()
+writer.add_text("models", model_define)
+model_define_r.close()
 criterion = nn.L1Loss()
 
 # init_weights(model, 'orthogonal')
@@ -109,9 +108,6 @@ if opts.resume:
 
 if cuda:
     model = nn.DataParallel(model).cuda()
-    # model.to(device)
-    # model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[local_rank], output_device=local_rank)
-
 
 optimizer = optim.Adam(model.parameters(), lr=opts.lr, betas=(0.9, 0.999))
 lr_scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=opts.decay_epoch, gamma=0.1)
@@ -140,14 +136,12 @@ for epoch in range(opts.start_epoch, opts.n_epoch + 1):
             )
             writer.add_scalar("l1loss", loss.item(), iteration+(epoch-1)*len(training_data_loader))
     lr_scheduler.step(epoch=epoch)
-    writer.add_image("output", make_grid(output), epoch)
-    # writer.add_figure("gradient", plot_grad_flow(model.named_parameters()), epoch)
+    writer.add_image("output", make_grid(output, range=[0., 1.]), epoch)
     save_checkpoint(model, opts.name, None, epoch, opts.checkpoint)
     if epoch % 1 == 0:
         mean_psnr = 0
-
+        model.eval()
         for iteration, batch in enumerate(testing_data_loader, 1):
-            model.eval()
             data, label = batch[0], batch[1]
             data = data.cuda() if opts.cuda else data.cpu()
             label = label.cuda() if opts.cuda else label.cpu()
