@@ -12,6 +12,7 @@ import torchvision.transforms.functional as F
 from skimage.io import imsave
 
 import utils
+import gc
 
 parser = argparse.ArgumentParser(description="Test Script")
 parser.add_argument(
@@ -32,34 +33,72 @@ if not os.path.exists(opt.output):
 
 model = import_module('models.' + opt.model.lower()).make_model(opt)
 
+def infer_(im, model, k=0):
+    torch.cuda.empty_cache()
+    model.eval()
 
-def infer(im, model, path, gpu=True):
-    if gpu:
-        model.load_state_dict(torch.load(path)['state_dict_model']) 
-        model = model.cuda()
-    else:
-        model.load_state_dict(torch.load(path, map_location='cpu')['state_dict_model'])
-    model = model.eval()
+    to_pil = transforms.ToPILImage()
+    im = to_pil(im)
 
-    h, w = im.size[0], im.size[1] ###
-    p1, p2 = (4 - h % 4) % 4, (4 - w % 4) % 4 ###
+    h, w = im.size[0], im.size[1]
+    p1, p2 = (4 - h % 4) % 4, (4 - w % 4) % 4
 
     transform = transforms.Compose([
         transforms.Pad((p1, p2, 0, 0), fill=0), ### left, top, right and bottom
         transforms.ToTensor()
     ])
-    im_augs = [
-        transform(im),
-        transform(F.hflip(im)),
-        transform(F.vflip(im)),
-        transform(F.hflip(F.vflip(im)))
-    ]
 
-    im_augs = torch.stack(im_augs) # 4, 4, 1512, 2068
-    if gpu: im_augs = im_augs.cuda()
+    if k == 0:
+        im_augs = [
+            transform(im),
+        ]
+    elif k == 1:
+        im_augs = [
+            transform(F.hflip(im)),
+        ]
+    elif k == 2:
+        im_augs = [
+            transform(F.vflip(im)),
+        ]   
+    elif k == 3:
+        im_augs = [
+            transform(F.hflip(F.vflip(im))),
+        ]              
+    
+    im_augs = torch.stack(im_augs)   
+    im_augs = im_augs.cuda()
     with torch.no_grad():
-        output_augs = model(im_augs) # 4, 3, 1512, 2068
-    output_augs = output_augs[:, :, p2:, p1:] ###
+        output_augs = model(im_augs) 
+    output_augs = output_augs[:, :, p2:, p1:]
+    return output_augs
+
+def infer(im, model, path):
+    model.load_state_dict(torch.load(path)['state_dict_model']) 
+    model = model.cuda()
+    model = model.eval()
+
+    to_tensor = transforms.ToTensor()
+    im = to_tensor(im) # 4, 1509, 2065
+    h, w = im.shape[-2], im.shape[-1]
+    r = w // 2
+
+    im_xy = [(0, r), (r//2, r//2+r), (r, w)] # (0, 1032), (516, 1548), (1032, 2065)
+    output_augs = torch.Tensor()
+    for k in range(4):
+        outs = []
+        for x, y in im_xy:
+            inp = im[:, :, x:y]
+            torch.cuda.empty_cache()
+            outs.append(infer_(inp, model, k=k) ) # 1, 3, 1509, 1032
+            torch.cuda.empty_cache()
+        feature = torch.cat((outs[0], outs[2]), dim=-1) #  1, 3, 1509, 2065
+        feature[:, :, :, im_xy[1][0]:im_xy[1][1]] = (feature[:, :, :, im_xy[1][0]:im_xy[1][1]] + outs[1]) / 2 # 1, 3, 1509, 1032
+        feature = feature.cpu()
+        output_augs = torch.cat((output_augs, feature), dim=0)
+        del feature
+        gc.collect()
+        torch.cuda.empty_cache()
+
     output_augs = np.transpose(output_augs.cpu().numpy(), (0, 2, 3, 1))
     output_augs = [
         output_augs[0],

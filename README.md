@@ -13,5 +13,5 @@ CUDA_VISIBLE_DEVICES=0 python test.py --model mix3_deep_encoder_decoder --checkp
 
 ## Full Validation
 ```bash
-CUDA_VISIBLE_DEVICES=0 python test.py --model mix3_deep_encoder_decoder --checkpoint ~/Codes/RAW2RGB/80.pth --output ~/haoyu/fullres_val_results --data ~/ram_data/RAW2RGB/FullResValidation
+CUDA_VISIBLE_DEVICES=0 python test-simple.py --model mix3_deep_encoder_decoder --checkpoint ~/Codes/RAW2RGB/80.pth --output ~/haoyu/fullres_val_results --data ~/ram_data/RAW2RGB/FullResValidation
 ```
