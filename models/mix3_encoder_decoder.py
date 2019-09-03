@@ -19,7 +19,7 @@ class MSRB(nn.Module):
         self.conv_5_1 = nn.Conv2d(n_feats, n_feats, kernel_size_2, stride=1, padding=kernel_size_2 // 2)
         self.conv_5_2 = nn.Conv2d(n_feats * 2, n_feats * 2, kernel_size_2, stride=1, padding=kernel_size_2 // 2)
         self.confusion = nn.Conv2d(n_feats * 4, n_feats, 1, padding=0, stride=1)
-        self.relu = nn.ReLU(inplace=True)
+        self.relu = nn.PReLU()
 
     def forward(self, x):
         input_1 = x
@@ -45,7 +45,7 @@ class RB(nn.Module):
             if nm == 'bn':
                 module_body.append(nn.BatchNorm2d(n_feats))
             if i == 0:
-                module_body.append(nn.ReLU(inplace=True))
+                module_body.append(nn.PReLU())
         self.module_body = nn.Sequential(*module_body)
 
     def forward(self, x):
@@ -81,12 +81,12 @@ class EncoderDecoderNet(nn.Module):
     def __build_model(self):
         self.head = nn.Sequential(
             nn.Conv2d(4, self.n_feats * 2, kernel_size=3, stride=1, padding=1, bias=True),
-            nn.ReLU(inplace=True)
+            nn.PReLU()
         )
 
         self.downer = nn.Sequential(
             nn.Conv2d(self.n_feats * 2, self.n_feats * 2, kernel_size=3, stride=2, padding=1, bias=True),
-            nn.ReLU(inplace=True),
+            nn.PReLU(),
             nn.Conv2d(self.n_feats * 2, self.n_feats * 4, kernel_size=3, stride=2, padding=1, bias=True)
         )
         local_path = [
@@ -96,7 +96,7 @@ class EncoderDecoderNet(nn.Module):
         self.local_path = nn.Sequential(*local_path)
         self.uper = nn.Sequential(
             nn.ConvTranspose2d(self.n_feats * 4, self.n_feats * 2, kernel_size=4, stride=2, padding=1, bias=True),
-            nn.ReLU(inplace=True),
+            nn.PReLU(),
             nn.ConvTranspose2d(self.n_feats * 2, self.n_feats * 2, kernel_size=4, stride=2, padding=1, bias=True)
         )
 
@@ -112,7 +112,7 @@ class EncoderDecoderNet(nn.Module):
 
         self.linear = nn.Sequential(
             nn.Conv2d(self.n_feats * 4, self.n_feats * 2, kernel_size=3, stride=1, padding=1, bias=True),
-            nn.ReLU(inplace=True)
+            nn.PReLU()
         )
 
         self.tail = nn.Conv2d(self.n_feats * 2, 3, kernel_size=3, stride=1, padding=1, bias=True)

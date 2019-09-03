@@ -42,9 +42,9 @@ def infer(im, model, path):
     ])
     im_augs = [
         transform(im),
-        # transform(F.hflip(im)),
-        # transform(F.vflip(im)),
-        # transform(F.hflip(F.vflip(im)))
+        transform(F.hflip(im)),
+        transform(F.vflip(im)),
+        transform(F.hflip(F.vflip(im)))
     ]
     im_augs = torch.stack(im_augs)
     im_augs = im_augs.cuda()
@@ -54,12 +54,12 @@ def infer(im, model, path):
     output_augs = np.transpose(output_augs.cpu().numpy(), (0, 2, 3, 1))
     output_augs = [
         output_augs[0],
-        # np.fliplr(output_augs[1]),
-        # np.flipud(output_augs[2]),
-        # np.fliplr(np.flipud(output_augs[3]))
+        np.fliplr(output_augs[1]),
+        np.flipud(output_augs[2]),
+        np.fliplr(np.flipud(output_augs[3]))
     ]
-    # return np.mean(output_augs, axis=0)
-    return output_augs[0]
+    return np.mean(output_augs, axis=0)
+    # return output_augs[0]
 
 
 images = utils.load_all_image(opt.data)
@@ -73,7 +73,7 @@ for im_path in tqdm(images):
     # c2 = '/data1/kangfu/Checkpoints/RAW2RGB/_mix_ednet_light_increase_32_8_12_128/42.pth'
     # c3 = '/data1/kangfu/Checkpoints/RAW2RGB/_mix_ednet_light_increase_32_8_12_128/43.pth'
     output_aug = [infer(img, model, opt.checkpoint),
-                  # infer(img, model, c2),
+                  # infer(img, model, '/data1/kangfu/Checkpoints/RAW2RGB/_mix_ednet_light_data_shuttle_32_10_12_128_futher/81.pth'),
                   # infer(img, model, c3)
                   ]
     output_aug = np.round(np.mean(output_aug, axis=0) * 255.).astype(np.uint8)

@@ -4,7 +4,7 @@ import torch.nn.functional as F
 
 
 def make_model(opts):
-    return EncoderDecoderNet(n_feats=32, n_blocks=8, n_resgroups=12)
+    return EncoderDecoderNet(n_feats=32, n_blocks=4, n_resgroups=10)
 
 
 class MSRB(nn.Module):
@@ -19,7 +19,7 @@ class MSRB(nn.Module):
         self.conv_5_1 = nn.Conv2d(n_feats, n_feats, kernel_size_2, stride=1, padding=kernel_size_2 // 2)
         self.conv_5_2 = nn.Conv2d(n_feats * 2, n_feats * 2, kernel_size_2, stride=1, padding=kernel_size_2 // 2)
         self.confusion = nn.Conv2d(n_feats * 4, n_feats, 1, padding=0, stride=1)
-        self.relu = nn.ReLU(inplace=True)
+        self.relu = nn.PReLU()
 
     def forward(self, x):
         input_1 = x
@@ -45,7 +45,7 @@ class RB(nn.Module):
             if nm == 'bn':
                 module_body.append(nn.BatchNorm2d(n_feats))
             if i == 0:
-                module_body.append(nn.ReLU(inplace=True))
+                module_body.append(nn.PReLU())
         self.module_body = nn.Sequential(*module_body)
 
     def forward(self, x):
@@ -81,60 +81,54 @@ class EncoderDecoderNet(nn.Module):
     def __build_model(self):
         self.head = nn.Sequential(
             nn.Conv2d(4, self.n_feats * 2, kernel_size=3, stride=1, padding=1, bias=True),
-            nn.ReLU(inplace=True)
+            nn.PReLU()
+        )
+
+        self.mser = nn.Sequential(
+            MSRB(self.n_feats * 2),
+            MSRB(self.n_feats * 2),
+            MSRB(self.n_feats * 2),
+            MSRB(self.n_feats * 2),
         )
 
         self.downer = nn.Sequential(
-            nn.Conv2d(self.n_feats * 2, self.n_feats * 2, kernel_size=3, stride=2, padding=1, bias=True),
-            nn.ReLU(inplace=True),
-            nn.Conv2d(self.n_feats * 2, self.n_feats * 4, kernel_size=3, stride=2, padding=1, bias=True)
+            nn.Conv2d(self.n_feats * 2, self.n_feats * 4, kernel_size=3, stride=2, padding=1, bias=True),
+            nn.PReLU(),
+            nn.Conv2d(self.n_feats * 4, self.n_feats * 8, kernel_size=3, stride=2, padding=1, bias=True)
         )
         local_path = [
-            RBGroup(n_feats=self.n_feats * 4, nm=self.nm, n_blocks=self.n_blocks) for _ in range(self.n_resgroups)
+            RBGroup(n_feats=self.n_feats * 8, nm=self.nm, n_blocks=self.n_blocks) for _ in range(self.n_resgroups)
         ]
-        local_path.append(nn.Conv2d(self.n_feats * 4, self.n_feats * 4, kernel_size=3, stride=1, padding=1, bias=True))
+        local_path.append(nn.Conv2d(self.n_feats * 8, self.n_feats * 8, kernel_size=3, stride=1, padding=1, bias=True))
         self.local_path = nn.Sequential(*local_path)
         self.uper = nn.Sequential(
-            nn.ConvTranspose2d(self.n_feats * 4, self.n_feats * 2, kernel_size=4, stride=2, padding=1, bias=True),
-            nn.ReLU(inplace=True),
-            nn.ConvTranspose2d(self.n_feats * 2, self.n_feats * 2, kernel_size=4, stride=2, padding=1, bias=True)
+            nn.ConvTranspose2d(self.n_feats * 8, self.n_feats * 4, kernel_size=4, stride=2, padding=1, bias=True),
+            nn.PReLU(),
+            nn.ConvTranspose2d(self.n_feats * 4, self.n_feats * 2, kernel_size=4, stride=2, padding=1, bias=True)
         )
 
-        self.global_path = nn.Sequential(
-            MSRB(self.n_feats * 2),
-            MSRB(self.n_feats * 2),
-            MSRB(self.n_feats * 2),
-            MSRB(self.n_feats * 2),
-            MSRB(self.n_feats * 2),
-            MSRB(self.n_feats * 2),
-        )
-        self.global_down = nn.Conv2d(self.n_feats * 6 * 2, self.n_feats * 2, kernel_size=3, stride=1, padding=1, bias=True)
-
-        self.linear = nn.Sequential(
-            nn.Conv2d(self.n_feats * 4, self.n_feats * 2, kernel_size=3, stride=1, padding=1, bias=True),
-            nn.ReLU(inplace=True)
-        )
+        global_path = []
+        for _ in range(6):
+            global_path.append(nn.Conv2d(self.n_feats * 2, self.n_feats * 2, kernel_size=3, stride=2, padding=1, bias=True))
+            global_path.append(nn.PReLU())
+        global_path.append(nn.AdaptiveAvgPool2d(1))
+        global_path.append(nn.Conv2d(self.n_feats * 2, self.n_feats * 2, kernel_size=1, stride=1, padding=0, bias=True))
+        self.global_path = nn.Sequential(*global_path)
 
         self.tail = nn.Conv2d(self.n_feats * 2, 3, kernel_size=3, stride=1, padding=1, bias=True)
 
     def forward(self, x):
         x = self.head(x)
 
-        x_down = self.downer(x)
+        ms_fea = self.mser(x)
+        ms_fea += x
+
+        global_fea = self.global_path(ms_fea)
+
+        x_down = self.downer(ms_fea)
         local_fea = self.local_path(x_down)
         local_fea += x_down
         local_fea = self.uper(local_fea)
 
-        out = x
-        msrb_out = []
-        for i in range(6):
-            out = self.global_path[i](out)
-            msrb_out.append(out)
-        global_fea = torch.cat(msrb_out, 1)
-        global_fea = self.global_down(global_fea)
-
-        fused_fea = torch.cat([global_fea, local_fea], 1)
-        fused_fea = self.linear(fused_fea)
-
-        x = self.tail(fused_fea)
-        return x
+        x = self.tail(local_fea+global_fea)
+        return F.tanh(x)
