@@ -33,11 +33,19 @@ if not os.path.exists(opt.output):
 model = import_module('models.' + opt.model.lower()).make_model(opt)
 
 
-def infer(im, model, path):
-    model.load_state_dict(torch.load(path)['state_dict_model'])
-    model = model.cuda()
+def infer(im, model, path, gpu=True):
+    if gpu:
+        model.load_state_dict(torch.load(path)['state_dict_model']) 
+        model = model.cuda()
+    else:
+        model.load_state_dict(torch.load(path, map_location='cpu')['state_dict_model'])
     model = model.eval()
+
+    h, w = im.size[0], im.size[1] ###
+    p1, p2 = (4 - h % 4) % 4, (4 - w % 4) % 4 ###
+
     transform = transforms.Compose([
+        transforms.Pad((p1, p2, 0, 0), fill=0), ### left, top, right and bottom
         transforms.ToTensor()
     ])
     im_augs = [
@@ -46,11 +54,12 @@ def infer(im, model, path):
         transform(F.vflip(im)),
         transform(F.hflip(F.vflip(im)))
     ]
-    im_augs = torch.stack(im_augs)
-    im_augs = im_augs.cuda()
 
+    im_augs = torch.stack(im_augs) # 4, 4, 1512, 2068
+    if gpu: im_augs = im_augs.cuda()
     with torch.no_grad():
-        output_augs = model(im_augs)
+        output_augs = model(im_augs) # 4, 3, 1512, 2068
+    output_augs = output_augs[:, :, p2:, p1:] ###
     output_augs = np.transpose(output_augs.cpu().numpy(), (0, 2, 3, 1))
     output_augs = [
         output_augs[0],
@@ -68,6 +77,7 @@ images.sort()
 for im_path in tqdm(images):
     filename = im_path.split('/')[-1]
     img = Image.open(im_path)
+
     # output = infer(img)
     # c1 = '/data1/kangfu/Checkpoints/RAW2RGB/_mix_ednet_light_data_shuttle_32_8_10_128/54.pth'
     # c2 = '/data1/kangfu/Checkpoints/RAW2RGB/_mix_ednet_light_increase_32_8_12_128/42.pth'

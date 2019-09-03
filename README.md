@@ -10,3 +10,8 @@ This is a PyTorch implement of RAW2RGBNet (haoyu)
 ```bash
 CUDA_VISIBLE_DEVICES=0 python test.py --model mix3_deep_encoder_decoder --checkpoint ./80.pth --output /data1/kangfu/Datasets/RAW2RGB/val_results --data ~/ram_data/RAW2RGB/Validation
 ```
+
+## Full Validation
+```bash
+CUDA_VISIBLE_DEVICES=0 python test.py --model mix3_deep_encoder_decoder --checkpoint ~/Codes/RAW2RGB/80.pth --output ~/haoyu/fullres_val_results --data ~/ram_data/RAW2RGB/FullResValidation
+```
