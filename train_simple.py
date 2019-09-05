@@ -11,7 +11,6 @@ import torch.nn.functional as F
 from torch.backends import cudnn
 from torchvision import transforms
 from torch.utils.data import DataLoader
-from torch.utils.tensorboard import SummaryWriter
 from torchvision.utils import make_grid
 
 from data import RAW2RGBData
@@ -19,6 +18,10 @@ from data import RAW2RGBData
 from tqdm import tqdm
 
 from utils import save_checkpoint, plot_grad_flow, init_weights
+
+from loss import MS_SSIM_L1
+
+# CUDA_VISIBLE_DEVICES=0 python -m torch.distributed.launch --nproc_per_node=1 train.py --name val_ednet_128_4_16_64 --model encoder_decoder --batchSize 4 --data_root /data1/kangfu/Datasets/RAW2RGB/ --checkpoint ~/haoyu/Checkpoints/RAW2RGB/ --cuda --size 64 --lr 1e-4 --n-epoch=100
 
 parser = argparse.ArgumentParser(description="Training Script")
 parser.add_argument("--name", required=True, type=str, help="name for training version")
@@ -55,8 +58,6 @@ parser.add_argument(
 opts = parser.parse_args()
 print(opts)
 
-writer = SummaryWriter(comment=opts.name)
-writer.add_text("command", " ".join(sys.argv))
 KWAI_SEED = 666
 torch.manual_seed(KWAI_SEED)
 np.random.seed(KWAI_SEED)
@@ -80,7 +81,7 @@ training_data_loader = DataLoader(
     batch_size=opts.batchSize,
     pin_memory=True,
     shuffle=True,
-    num_workers=opts.threads,
+    num_workers=opts.threads
 )
 
 testing_data_loader = DataLoader(
@@ -92,19 +93,8 @@ testing_data_loader = DataLoader(
 model = import_module('models.' + opts.model.lower()).make_model(opts)
 model_define_r = open(os.path.join("models", opts.model.lower() + ".py"), 'r')
 model_define = model_define_r.read()
-writer.add_text("models", model_define)
 model_define_r.close()
-criterion = nn.L1Loss()
-
-# init_weights(model, 'orthogonal')
-
-if opts.resume:
-    if os.path.isfile(opts.resume):
-        print("======> loading checkpoint at '{}'".format(opts.resume))
-        checkpoint = torch.load(opts.resume)
-        model.load_state_dict(checkpoint["state_dict_model"], strict=False)
-    else:
-        print("======> founding no checkpoint at '{}'".format(opts.resume))
+criterion = MS_SSIM_L1()
 
 if cuda:
     model = nn.DataParallel(model).cuda()
@@ -129,30 +119,3 @@ for epoch in range(opts.start_epoch, opts.n_epoch + 1):
 
         loss.backward()
         optimizer.step()
-
-        if iteration % 100 == 0:
-            pbar.set_description("Epoch[{}]({}/{}): Loss: {:.4f}".format(
-                epoch, iteration, len(training_data_loader), loss.item())
-            )
-            writer.add_scalar("l1loss", loss.item(), iteration+(epoch-1)*len(training_data_loader))
-    lr_scheduler.step(epoch=epoch)
-    writer.add_image("output", make_grid(output, range=[0., 1.]), epoch)
-    save_checkpoint(model, opts.name, None, epoch, opts.checkpoint)
-    if epoch % 1 == 0:
-        mean_psnr = 0
-        model.eval()
-        for iteration, batch in enumerate(testing_data_loader, 1):
-            data, label = batch[0], batch[1]
-            data = data.cuda() if opts.cuda else data.cpu()
-            label = label.cuda() if opts.cuda else label.cpu()
-
-            with torch.no_grad():
-                output = model(data)
-            output = torch.clamp(output, 0.0, 1.0)
-            mse = F.mse_loss(output, label)
-            psnr = 10 * np.log10(1.0 / mse.item())
-            mean_psnr += psnr
-        mean_psnr /= len(testing_data_loader)
-        writer.add_scalar("mean_psnr", mean_psnr, epoch)
-        print("Vaild  epoch %d psnr: %f" % (epoch, mean_psnr))
-writer.close()
