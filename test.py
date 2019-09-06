@@ -15,7 +15,7 @@ import utils
 
 parser = argparse.ArgumentParser(description="Test Script")
 parser.add_argument(
-    "--model",
+    "--model", 
     required=True,
     type=str,
     help="name of model for this training"
