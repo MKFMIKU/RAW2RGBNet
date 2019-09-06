@@ -8,11 +8,12 @@ import torch
 from torch import nn, optim
 from torchvision import transforms
 from tqdm import tqdm
-import torchvision.transforms.functional as F
 from skimage.io import imsave
 
 import utils
 import gc
+
+# CUDA_VISIBLE_DEVICES=0 python test-simple.py --model mix3_deep_encoder_decoder --checkpoint ./96.pth --output ~/haoyu/fullres_val_results --data ~/ram_data/RAW2RGB/FullResValidation
 
 parser = argparse.ArgumentParser(description="Test Script")
 parser.add_argument(
