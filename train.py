@@ -25,7 +25,7 @@ parser.add_argument("--name", required=True, type=str, help="name for training v
 parser.add_argument("--div", type=int, default=88800, help="division of train && test data. Default=88000")
 parser.add_argument("--batchSize", type=int, default=64, help="training batch size. Default=64")
 parser.add_argument("--threads", type=int, default=8, help="threads for data loader to use. Default=8")
-parser.add_argument("--decay_epoch", type=int, default=50, help="epoch from which to start lr decay. Default=1000")
+parser.add_argument("--decay_epoch", type=int, default=100, help="epoch from which to start lr decay. Default=1000")
 parser.add_argument("--resume", default="", type=str, help="path to checkpoint. Default: none")
 parser.add_argument("--start-epoch", default=1, type=int, help="Manual epoch number. Default=1")
 parser.add_argument("--n-epoch", type=int, default=2000, help="number of epochs to train. Default=2000")

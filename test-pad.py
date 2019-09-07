@@ -1,13 +1,17 @@
 import argparse
 import os
 from importlib import import_module
+
 from PIL import Image
+import numpy as np
 import torch
+from torch import nn, optim
 from torchvision import transforms
 from tqdm import tqdm
+from skimage.io import imsave
+
 import utils
-import numpy as np
-import torchvision.transforms.functional as F
+import gc
 
 parser = argparse.ArgumentParser(description="Test Script")
 parser.add_argument(
@@ -36,34 +40,31 @@ images.sort()
 
 
 def infer(im):
-    to_tensor = transforms.ToTensor()
-    im_augs = [
-        to_tensor(im),
-        to_tensor(F.hflip(im)),
-        to_tensor(F.vflip(im)),
-        to_tensor(F.hflip(F.vflip(im)))
-    ]
-    im_augs = torch.stack(im_augs)
-    im_augs = im_augs.cuda()
+    w, h = im.size
+    pad_w = 8 - w % 8
+    pad_h = 8 - h % 8
+    padding = 100
+
+    im_pad = transforms.Pad(padding=(pad_w//2, pad_h//2, pad_w - pad_w//2, pad_h - pad_h//2), padding_mode='reflect')(im)
+    im_pad_th = transforms.ToTensor()(im_pad)
+    im_pad_th = im_pad_th.unsqueeze(0).cuda()
+    _, _, _, ww = im_pad_th.shape
+    im_pad_th_l, im_pad_th_r = im_pad_th[:, :, :, :ww//2 + padding], im_pad_th[:, :, :, ww//2-padding:]
     with torch.no_grad():
-        output_augs = model(im_augs)
-    output_augs = np.transpose(output_augs.cpu().numpy(), (0, 2, 3, 1))
-    output_augs = [
-        output_augs[0],
-        np.fliplr(output_augs[1]),
-        np.flipud(output_augs[2]),
-        np.fliplr(np.flipud(output_augs[3]))
-    ]
-    output = np.mean(output_augs, axis=0) * 255.
-    output = output.round()
-    output[output >= 255] = 255
-    output[output <= 0] = 0
-    output = Image.fromarray(output.astype(np.uint8), mode='RGB')
+        torch.cuda.empty_cache()
+        im_pad_th_l = model(im_pad_th_l)
+        torch.cuda.empty_cache()
+        im_pad_th_r = model(im_pad_th_r)
+    pad_th = (im_pad_th_l[:, :, :, -padding * 2:] + im_pad_th_r[:, :, :, :padding * 2]) / 2
+    output = torch.cat((im_pad_th_l[:, :, :, :-padding*3], pad_th, im_pad_th_r[:, :, :, padding*2:]), dim=-1)
+    output = output.squeeze(0).cpu()
+    output = torch.clamp(output, 0., 1.)
+    output = transforms.ToPILImage()(output)
     return output
 
 
 for im_path in tqdm(images):
     filename = im_path.split('/')[-1]
     img = Image.open(im_path)
-    img = infer(img)
-    img.save(os.path.join(opt.output, filename))
+    output = infer(img)
+    output.save(os.path.join(opt.output, filename))

@@ -4,7 +4,7 @@ import torch.nn.functional as F
 
 
 def make_model(opts):
-    return EncoderDecoderNet(n_feats=32, n_blocks=10, n_resgroups=8)
+    return EncoderDecoderNet(n_feats=32, n_blocks=10, n_resgroups=16)
 
 
 class MSRB(nn.Module):
@@ -114,8 +114,6 @@ class EncoderDecoderNet(nn.Module):
 
         self.linear = nn.Sequential(
             nn.Conv2d(self.n_feats * 4, self.n_feats * 2, kernel_size=3, stride=1, padding=1, bias=True),
-            nn.PReLU(),
-            nn.Conv2d(self.n_feats * 2, self.n_feats * 2, kernel_size=3, stride=1, padding=1, bias=True),
             nn.PReLU(),
             nn.Conv2d(self.n_feats * 2, self.n_feats * 2, kernel_size=3, stride=1, padding=1, bias=True),
             nn.PReLU()
