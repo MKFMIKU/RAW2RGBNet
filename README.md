@@ -16,7 +16,7 @@ python psnr.py --data /data1/kangfu/Datasets/RAW2RGB/val_results --gt /data1/kan
 
 ## Testing
 ```bash
-python test.py --model local_global_net --checkpoint /media/disk1/fordata/web_server/meikangfu/checkpoints_raw2rgb/17.pth --output /media/disk1/fordata/web_server/meikangfu/Datasets/RAW2RGB/submits --data /media/disk1/fordata/web_server/meikangfu/Datasets/RAW2RGB/Validation
+CUDA_VISIBLE_DEVICES=0 python test.py --model mix3_deep_encoder_decoder --checkpoint ./80.pth --output /data1/kangfu/Datasets/RAW2RGB/val_results --data ~/ram_data/RAW2RGB/Validation
 ```
 
 ## Testing Full-Resolution Images on Single Titan XP (12GB)
