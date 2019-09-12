@@ -6,6 +6,8 @@ import torch
 from torchvision import transforms
 from tqdm import tqdm
 import utils
+import torchvision.transforms.functional as F
+import numpy as np
 
 parser = argparse.ArgumentParser(description="Test Script")
 parser.add_argument(
@@ -37,17 +39,34 @@ def infer(im):
     w, h = im.size
     pad_w = 4 - w % 4
     pad_h = 4 - h % 4
+    to_tensor = transforms.ToTensor()
 
     im_pad = transforms.Pad(padding=(pad_w//2, pad_h//2, pad_w - pad_w//2, pad_h - pad_h//2), padding_mode='reflect')(im)
-    im_pad_th = transforms.ToTensor()(im_pad)
-    im_pad_th = im_pad_th.unsqueeze(0).cuda()
-    with torch.no_grad():
-        torch.cuda.empty_cache()
-        output = model(im_pad_th)
-    output = output[:, :, pad_h//2:-(pad_h-pad_h//2), pad_w//2:-(pad_w-pad_w//2)]
-    output = output.squeeze(0).cpu()
-    output = torch.clamp(output, 0., 1.)
-    output = transforms.ToPILImage()(output)
+    im_augs = [
+        to_tensor(im_pad),
+        to_tensor(F.hflip(im_pad)),
+        to_tensor(F.vflip(im_pad)),
+        to_tensor(F.hflip(F.vflip(im_pad)))
+    ]
+    output_augs = []
+    for im_pad in im_augs:
+        im_pad_th = im_pad.unsqueeze(0).cuda()
+        with torch.no_grad():
+            torch.cuda.empty_cache()
+            output = model(im_pad_th)
+        output_augs.append(np.transpose(output.squeeze(0).cpu().numpy(), (1, 2, 0)))
+    output_augs = [
+        output_augs[0],
+        np.fliplr(output_augs[1]),
+        np.flipud(output_augs[2]),
+        np.fliplr(np.flipud(output_augs[3]))
+    ]
+    output = np.mean(output_augs, axis=0) * 255.
+    output = output[pad_h // 2:-(pad_h - pad_h // 2), pad_w // 2:-(pad_w - pad_w // 2), :]
+    output = output.round()
+    output[output >= 255] = 255
+    output[output <= 0] = 0
+    output = Image.fromarray(output.astype(np.uint8), mode='RGB')
     return output
 
 

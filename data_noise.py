@@ -7,6 +7,24 @@ import numpy as np
 import torch
 
 
+def add_noise(x, noise='.'):
+    if noise is not '.':
+        noise_type = noise[0]
+        noise_value = int(noise[1:])
+        if noise_type == 'G':
+            noises = np.random.normal(scale=noise_value, size=x.shape)
+            noises = noises.round()
+        elif noise_type == 'S':
+            noises = np.random.poisson(x * noise_value) / noise_value
+            noises = noises - noises.mean(axis=0).mean(axis=0)
+
+        x_noise = x.astype(np.int16) + noises.astype(np.int16)
+        x_noise = x_noise.clip(0, 255).astype(np.uint8)
+        return x_noise
+    else:
+        return x
+
+
 def is_image_file(filename):
     filename_lower = filename.lower()
     return any(filename_lower.endswith(extension) for extension in ['.png', '.jpg', '.jpeg', '.tif'])
@@ -77,6 +95,7 @@ class RAW2RGBData(data.Dataset):
 
     def __getitem__(self, index):
         data = np.asarray(Image.open(self.data_filenames[index]))
+        add_noise(data, 'G1')
         label = np.asarray(Image.open(self.label_filenames[index]))
 
         data, label = get_patch(data, label, patch_size=self.patch_size)

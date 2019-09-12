@@ -13,7 +13,7 @@ from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
 from torchvision.utils import make_grid
 
-from data import RAW2RGBData
+from data_noise import RAW2RGBData
 
 from tqdm import tqdm
 

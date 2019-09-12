@@ -2,15 +2,15 @@ import os
 from os import listdir
 from os.path import join
 from os.path import exists
-import torch
+# import torch
 import random
-from torch.autograd import Variable
-from torch.nn import init
+# from torch.autograd import Variable
+# from torch.nn import init
 
 from matplotlib.lines import Line2D
 import matplotlib.pyplot as plt
 import numpy as np
-from torch import nn
+# from torch import nn
 
 import math
 

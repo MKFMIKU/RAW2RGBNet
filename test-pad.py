@@ -39,6 +39,24 @@ images = utils.load_all_image(opt.data)
 images.sort()
 
 
+def add_noise(x, noise='.'):
+    if noise is not '.':
+        noise_type = noise[0]
+        noise_value = int(noise[1:])
+        if noise_type == 'G':
+            noises = np.random.normal(scale=noise_value, size=x.shape)
+            noises = noises.round()
+        elif noise_type == 'S':
+            noises = np.random.poisson(x * noise_value) / noise_value
+            noises = noises - noises.mean(axis=0).mean(axis=0)
+
+        x_noise = x.astype(np.int16) + noises.astype(np.int16)
+        x_noise = x_noise.clip(0, 255).astype(np.uint8)
+        return x_noise
+    else:
+        return x
+
+
 def infer(im):
     w, h = im.size
     pad_w = 8 - w % 8
@@ -46,6 +64,8 @@ def infer(im):
     padding = 100
 
     im_pad = transforms.Pad(padding=(pad_w//2, pad_h//2, pad_w - pad_w//2, pad_h - pad_h//2), padding_mode='reflect')(im)
+    im_pad = np.asarray(im_pad)
+    im_pad = add_noise(im_pad, 'G1')
     im_pad_th = transforms.ToTensor()(im_pad)
     im_pad_th = im_pad_th.unsqueeze(0).cuda()
     _, _, _, ww = im_pad_th.shape
@@ -56,7 +76,7 @@ def infer(im):
         torch.cuda.empty_cache()
         im_pad_th_r = model(im_pad_th_r)
     pad_th = (im_pad_th_l[:, :, :, -padding * 2:] + im_pad_th_r[:, :, :, :padding * 2]) / 2
-    output = torch.cat((im_pad_th_l[:, :, :, :-padding*3], pad_th, im_pad_th_r[:, :, :, padding*2:]), dim=-1)
+    output = torch.cat((im_pad_th_l[:, :, :, :-padding*2], pad_th, im_pad_th_r[:, :, :, padding*2:]), dim=-1)
     output = output.squeeze(0).cpu()
     output = torch.clamp(output, 0., 1.)
     output = transforms.ToPILImage()(output)

@@ -41,7 +41,7 @@ def infer(im):
         to_tensor(im),
         to_tensor(F.hflip(im)),
         to_tensor(F.vflip(im)),
-        to_tensor(F.hflip(F.vflip(im)))
+        to_tensor(F.hflip(F.vflip(im))),
     ]
     im_augs = torch.stack(im_augs)
     im_augs = im_augs.cuda()
@@ -52,7 +52,7 @@ def infer(im):
         output_augs[0],
         np.fliplr(output_augs[1]),
         np.flipud(output_augs[2]),
-        np.fliplr(np.flipud(output_augs[3]))
+        np.fliplr(np.flipud(output_augs[3])),
     ]
     output = np.mean(output_augs, axis=0) * 255.
     output = output.round()
