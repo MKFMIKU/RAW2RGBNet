@@ -6,8 +6,8 @@ import torch
 from torchvision import transforms
 from tqdm import tqdm
 import utils
-import numpy as np
 import torchvision.transforms.functional as F
+import numpy as np
 
 parser = argparse.ArgumentParser(description="Test Script")
 parser.add_argument(
@@ -36,25 +36,33 @@ images.sort()
 
 
 def infer(im):
+    w, h = im.size
+    pad_w = 4 - w % 4
+    pad_h = 4 - h % 4
     to_tensor = transforms.ToTensor()
+
+    im_pad = transforms.Pad(padding=(pad_w//2, pad_h//2, pad_w - pad_w//2, pad_h - pad_h//2), padding_mode='reflect')(im)
     im_augs = [
-        to_tensor(im),
-        to_tensor(F.hflip(im)),
-        to_tensor(F.vflip(im)),
-        to_tensor(F.hflip(F.vflip(im))),
+        to_tensor(im_pad),
+        to_tensor(F.hflip(im_pad)),
+        to_tensor(F.vflip(im_pad)),
+        to_tensor(F.hflip(F.vflip(im_pad)))
     ]
-    im_augs = torch.stack(im_augs)
-    im_augs = im_augs.cuda()
-    with torch.no_grad():
-        output_augs = model(im_augs)
-    output_augs = np.transpose(output_augs.cpu().numpy(), (0, 2, 3, 1))
+    output_augs = []
+    for im_pad in im_augs:
+        im_pad_th = im_pad.unsqueeze(0).cuda()
+        with torch.no_grad():
+            torch.cuda.empty_cache()
+            output = model(im_pad_th)
+        output_augs.append(np.transpose(output.squeeze(0).cpu().numpy(), (1, 2, 0)))
     output_augs = [
         output_augs[0],
         np.fliplr(output_augs[1]),
         np.flipud(output_augs[2]),
-        np.fliplr(np.flipud(output_augs[3])),
+        np.fliplr(np.flipud(output_augs[3]))
     ]
     output = np.mean(output_augs, axis=0) * 255.
+    output = output[pad_h // 2:-(pad_h - pad_h // 2), pad_w // 2:-(pad_w - pad_w // 2), :]
     output = output.round()
     output[output >= 255] = 255
     output[output <= 0] = 0
@@ -65,5 +73,6 @@ def infer(im):
 for im_path in tqdm(images):
     filename = im_path.split('/')[-1]
     img = Image.open(im_path)
-    img = infer(img)
-    img.save(os.path.join(opt.output, filename))
+    output = infer(img)
+    assert output.size == img.size
+    output.save(os.path.join(opt.output, filename))

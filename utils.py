@@ -2,14 +2,15 @@ import os
 from os import listdir
 from os.path import join
 from os.path import exists
-import torch
+# import torch
 import random
-from torch.autograd import Variable
-from torch.nn import init
+# from torch.autograd import Variable
+# from torch.nn import init
 
 from matplotlib.lines import Line2D
 import matplotlib.pyplot as plt
 import numpy as np
+# from torch import nn
 
 import math
 
@@ -115,3 +116,7 @@ def init_weights(net, init_type='normal', init_gain=0.02):
 
     print('initialize network with %s' % init_type)
     net.apply(init_func)  # apply the initialization function <init_func>
+
+
+def quantize(img, rgb_range):
+    return img.mul(rgb_range).clamp(0, 255).round()

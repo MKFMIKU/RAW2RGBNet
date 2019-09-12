@@ -19,7 +19,7 @@ class MSRB(nn.Module):
         self.conv_5_1 = nn.Conv2d(n_feats, n_feats, kernel_size_2, stride=1, padding=kernel_size_2 // 2)
         self.conv_5_2 = nn.Conv2d(n_feats * 2, n_feats * 2, kernel_size_2, stride=1, padding=kernel_size_2 // 2)
         self.confusion = nn.Conv2d(n_feats * 4, n_feats, 1, padding=0, stride=1)
-        self.relu = nn.ReLU(inplace=True)
+        self.relu = nn.PReLU()
 
     def forward(self, x):
         input_1 = x
@@ -45,7 +45,7 @@ class RB(nn.Module):
             if nm == 'bn':
                 module_body.append(nn.BatchNorm2d(n_feats))
             if i == 0:
-                module_body.append(nn.ReLU(inplace=True))
+                module_body.append(nn.PReLU())
         self.module_body = nn.Sequential(*module_body)
 
     def forward(self, x):
@@ -79,14 +79,31 @@ class EncoderDecoderNet(nn.Module):
         self.__build_model()
 
     def __build_model(self):
+
+        self.fix_path = nn.Sequential(
+            nn.Conv2d(4, self.n_feats, kernel_size=3, stride=1, padding=2, bias=True),
+            nn.PReLU(),
+            nn.Conv2d(self.n_feats, self.n_feats, kernel_size=3, stride=2, padding=1, bias=True),
+            nn.PReLU(),
+            nn.Conv2d(self.n_feats, self.n_feats, kernel_size=3, stride=2, padding=1, bias=True),
+            nn.PReLU(),
+            nn.Conv2d(self.n_feats, self.n_feats, kernel_size=3, stride=2, padding=1, bias=True),
+            nn.PReLU(),
+            nn.Conv2d(self.n_feats, self.n_feats, kernel_size=3, stride=2, padding=1, bias=True),
+            nn.PReLU(),
+            nn.Conv2d(self.n_feats, self.n_feats * 2, kernel_size=3, stride=2, padding=1, bias=False),
+            nn.PReLU(),
+            nn.AdaptiveAvgPool2d(1)
+        )
+
         self.head = nn.Sequential(
             nn.Conv2d(4, self.n_feats * 2, kernel_size=3, stride=1, padding=1, bias=True),
-            nn.ReLU(inplace=True)
+            nn.PReLU()
         )
 
         self.downer = nn.Sequential(
             nn.Conv2d(self.n_feats * 2, self.n_feats * 2, kernel_size=3, stride=2, padding=1, bias=True),
-            nn.ReLU(inplace=True),
+            nn.PReLU(),
             nn.Conv2d(self.n_feats * 2, self.n_feats * 4, kernel_size=3, stride=2, padding=1, bias=True)
         )
         local_path = [
@@ -96,7 +113,7 @@ class EncoderDecoderNet(nn.Module):
         self.local_path = nn.Sequential(*local_path)
         self.uper = nn.Sequential(
             nn.ConvTranspose2d(self.n_feats * 4, self.n_feats * 2, kernel_size=4, stride=2, padding=1, bias=True),
-            nn.ReLU(inplace=True),
+            nn.PReLU(),
             nn.ConvTranspose2d(self.n_feats * 2, self.n_feats * 2, kernel_size=4, stride=2, padding=1, bias=True)
         )
 
@@ -114,12 +131,15 @@ class EncoderDecoderNet(nn.Module):
 
         self.linear = nn.Sequential(
             nn.Conv2d(self.n_feats * 4, self.n_feats * 2, kernel_size=3, stride=1, padding=1, bias=True),
-            nn.ReLU(inplace=True)
+            nn.PReLU()
         )
 
         self.tail = nn.Conv2d(self.n_feats * 2, 3, kernel_size=3, stride=1, padding=1, bias=True)
 
     def forward(self, x):
+        fix_s = F.interpolate(x, size=192, mode='bilinear')
+        fix_s = self.fix_path(fix_s)
+
         x = self.head(x)
 
         x_down = self.downer(x)
@@ -136,7 +156,9 @@ class EncoderDecoderNet(nn.Module):
         global_fea = self.global_down(global_fea)
 
         fused_fea = torch.cat([global_fea, local_fea], 1)
+
         fused_fea = self.linear(fused_fea)
+        fused_fea += fix_s
 
         x = self.tail(fused_fea)
-        return x
+        return F.tanh(x)

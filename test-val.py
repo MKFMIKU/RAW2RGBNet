@@ -33,6 +33,7 @@ model = model.eval()
 
 images = utils.load_all_image(opt.data)
 images.sort()
+images = images[::200]
 
 
 def infer(im):

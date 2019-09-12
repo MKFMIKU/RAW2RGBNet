@@ -9,7 +9,6 @@ import torch
 from torch import nn, optim
 import torch.nn.functional as F
 from torch.backends import cudnn
-from torchvision import transforms
 from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
 from torchvision.utils import make_grid
@@ -25,14 +24,13 @@ parser.add_argument("--name", required=True, type=str, help="name for training v
 parser.add_argument("--div", type=int, default=88800, help="division of train && test data. Default=88000")
 parser.add_argument("--batchSize", type=int, default=64, help="training batch size. Default=64")
 parser.add_argument("--threads", type=int, default=8, help="threads for data loader to use. Default=8")
-parser.add_argument("--decay_epoch", type=int, default=50, help="epoch from which to start lr decay. Default=1000")
+parser.add_argument("--decay_epoch", type=int, default=200, help="epoch from which to start lr decay. Default=1000")
 parser.add_argument("--resume", default="", type=str, help="path to checkpoint. Default: none")
 parser.add_argument("--start-epoch", default=1, type=int, help="Manual epoch number. Default=1")
 parser.add_argument("--n-epoch", type=int, default=2000, help="number of epochs to train. Default=2000")
 parser.add_argument("--cuda", default=True, action="store_true", help="Use cuda?")
 parser.add_argument("--lr", type=float, default=0.0001, help="learning rate. Default=1e-4")
 parser.add_argument("--size", type=int, default=64, help="size that crop image into")
-parser.add_argument("--local_rank", type=int, default=0, help="local rank")
 parser.add_argument(
     "--model",
     required=True,
@@ -65,15 +63,8 @@ np.random.seed(KWAI_SEED)
 cuda = opts.cuda
 cudnn.benchmark = True
 
-train_dataset = RAW2RGBData(opts.data_root, div=opts.div, transform=transforms.Compose([
-    transforms.RandomCrop(opts.size),
-    transforms.RandomHorizontalFlip(),
-    transforms.RandomVerticalFlip(),
-    transforms.ToTensor(),
-]))
-test_datasets = RAW2RGBData(opts.data_root, div=opts.div, test=True, transform=transforms.Compose([
-    transforms.ToTensor()
-]))
+train_dataset = RAW2RGBData(opts.data_root, patch_size=opts.size)
+test_datasets = RAW2RGBData(opts.data_root, test=True)
 
 training_data_loader = DataLoader(
     dataset=train_dataset,
@@ -109,7 +100,8 @@ if opts.resume:
 if cuda:
     model = nn.DataParallel(model).cuda()
 
-optimizer = optim.Adam(model.parameters(), lr=opts.lr, betas=(0.9, 0.999))
+optimizer = optim.Adam(filter(lambda p: p.requires_grad, model.parameters()), lr=opts.lr, betas=(0.9, 0.999))
+# optimizer = optim.Adam(model.parameters(), lr=opts.lr, betas=(0.9, 0.999))
 lr_scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=opts.decay_epoch, gamma=0.1)
 
 for epoch in range(opts.start_epoch, opts.n_epoch + 1):
